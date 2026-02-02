@@ -18,6 +18,7 @@ import '../admin/add_book_screen.dart';
 import '../admin/add_video_screen.dart';
 import 'users_management_screen.dart';
 import 'book_detail_screen.dart';
+import 'mobile_video_player.dart';
 import '../../../core/services/optimized_cache_service.dart';
 import '../../../core/widgets/lazy_tab_view.dart';
 import '../../widgets/optimized_modals.dart';
@@ -97,27 +98,18 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
   }
 
   void _performSearch(String query) {
-    if (query.trim().isEmpty) return;
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _cachedTabs.clear();
+      });
+      return;
+    }
     
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Resultados para "$query"'),
-        content: const SizedBox(
-          width: 400,
-          height: 200,
-          child: Center(
-            child: Text('Función de búsqueda en desarrollo'),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
+    setState(() {
+      _searchQuery = query;
+      _cachedTabs.clear();
+    });
   }
 
   Widget _getSelectedPage() {
@@ -299,7 +291,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.asset(
-                  'assets/images/yavirac.png',
+                  'assets/images/logo.jpeg',
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.school,
@@ -464,17 +456,21 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
             if (isMobile) const SizedBox(width: 16),
             if (!isMobile) const Spacer(),
             Text(
-              'Biblioteca Virtual Yavirac',
+              'Repositorio Digital Alfredo Costales',
               style: OptimizedTheme.heading2.copyWith(
-                fontSize: isMobile ? 18 : 24,
+                fontSize: isMobile ? 16 : 20,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.5,
                 color: Colors.white,
               ),
             ),
             const Spacer(),
+            // Campo de búsqueda para móvil y web
+            if (isMobile) _buildMobileSearchField(),
             if (!isMobile) _buildSearchField(),
             if (!isMobile) _buildSearchButton(),
+            // Botón de búsqueda para móvil
+            if (isMobile) _buildMobileSearchButton(),
             if (!isMobile) const SizedBox(width: 12),
             if (!isMobile) Text(
               _userName,
@@ -501,6 +497,69 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     );
   }
 
+  Widget _buildMobileSearchField() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _searchingNotifier,
+      builder: (context, isSearching, child) {
+        return isSearching
+            ? Expanded(
+                child: Container(
+                  height: 40,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.yaviracOrange, width: 1),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.black, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar...',
+                      hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    onChanged: (value) {
+                      if (value.trim().isNotEmpty) {
+                        _performSearch(value);
+                      }
+                    },
+                    onSubmitted: (value) {
+                      _searchingNotifier.value = false;
+                      if (value.trim().isNotEmpty) {
+                        _performSearch(value);
+                      } else {
+                        setState(() => _searchQuery = '');
+                      }
+                    },
+                    autofocus: true,
+                  ),
+                ),
+              )
+            : const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildMobileSearchButton() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _searchingNotifier,
+      builder: (context, isSearching, child) {
+        return IconButton(
+          icon: Icon(isSearching ? Icons.close : Icons.search, color: Colors.white),
+          onPressed: () {
+            _searchingNotifier.value = !_searchingNotifier.value;
+            if (!_searchingNotifier.value) {
+              _searchController.clear();
+              setState(() => _searchQuery = '');
+            }
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildSearchField() {
     return ValueListenableBuilder<bool>(
       valueListenable: _searchingNotifier,
@@ -523,10 +582,19 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
-                  onChanged: (value) => setState(() => _searchQuery = value),
+                  onChanged: (value) {
+                    // Búsqueda en tiempo real
+                    if (value.trim().isNotEmpty) {
+                      _performSearch(value);
+                    }
+                  },
                   onSubmitted: (value) {
                     _searchingNotifier.value = false;
-                    setState(() => _searchQuery = '');
+                    if (value.trim().isNotEmpty) {
+                      _performSearch(value);
+                    } else {
+                      setState(() => _searchQuery = '');
+                    }
                   },
                   autofocus: true,
                 ),
@@ -1144,52 +1212,131 @@ class _SearchResultsTab extends StatelessWidget {
   final String searchQuery;
   const _SearchResultsTab({required this.searchQuery});
 
-  Future<List<Map<String, dynamic>>> _searchBooks() async {
+  Future<void> _checkDatabaseContent() async {
     try {
-      final response = await Supabase.instance.client
+      final allBooks = await Supabase.instance.client.from('books').select().limit(1);
+      final allVideos = await Supabase.instance.client.from('videos').select().limit(1);
+      
+      print('📊 Total libros en BD: ${allBooks.length}');
+      print('📊 Total videos en BD: ${allVideos.length}');
+      
+      if (allBooks.isNotEmpty) {
+        print('📚 Columnas libros: ${allBooks.first.keys.toList()}');
+        print('📚 Ejemplo libro: ${allBooks.first}');
+      }
+      if (allVideos.isNotEmpty) {
+        print('🎥 Columnas videos: ${allVideos.first.keys.toList()}');
+        print('🎥 Ejemplo video: ${allVideos.first}');
+      }
+    } catch (e) {
+      print('❌ Error verificando BD: $e');
+    }
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> _searchContent() async {
+    try {
+      print('🔍 Buscando: $searchQuery');
+      
+      // Buscar en libros
+      final booksResponse1 = await Supabase.instance.client
           .from('books')
           .select()
           .ilike('title', '%$searchQuery%');
       
-      final response2 = await Supabase.instance.client
+      final booksResponse2 = await Supabase.instance.client
           .from('books')
           .select()
           .ilike('author', '%$searchQuery%');
       
-      final allResults = [...response, ...response2];
-      final uniqueResults = <String, Map<String, dynamic>>{};
+      final booksResponse3 = await Supabase.instance.client
+          .from('books')
+          .select()
+          .ilike('category', '%$searchQuery%');
       
-      for (var book in allResults) {
-        uniqueResults[book['id']] = book;
+      // Buscar en videos
+      final videosResponse1 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('title', '%$searchQuery%');
+      
+      final videosResponse2 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('category', '%$searchQuery%');
+      
+      final videosResponse3 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('subcategory', '%$searchQuery%');
+      
+      // Combinar y eliminar duplicados
+      final allBooks = [...booksResponse1, ...booksResponse2, ...booksResponse3];
+      final uniqueBooks = <String, Map<String, dynamic>>{};
+      for (var book in allBooks) {
+        uniqueBooks[book['id']] = book;
       }
       
-      return uniqueResults.values.toList();
+      final allVideos = [...videosResponse1, ...videosResponse2, ...videosResponse3];
+      final uniqueVideos = <String, Map<String, dynamic>>{};
+      for (var video in allVideos) {
+        uniqueVideos[video['id']] = video;
+      }
+      
+      print('✅ Total únicos - Libros: ${uniqueBooks.length}, Videos: ${uniqueVideos.length}');
+      
+      return {
+        'books': uniqueBooks.values.toList(),
+        'videos': uniqueVideos.values.toList(),
+      };
     } catch (e) {
-      return [];
+      print('❌ Error en búsqueda: $e');
+      return {'books': [], 'videos': []};
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Verificar contenido de la BD al construir
+    _checkDatabaseContent();
+    
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Resultados para "$searchQuery"',
-            style: OptimizedTheme.heading2,
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () {
+                  // Limpiar búsqueda
+                  final homeState = context.findAncestorStateOfType<_UserHomeState>();
+                  homeState?._searchController.clear();
+                  homeState?.setState(() {
+                    homeState._searchQuery = '';
+                    homeState._cachedTabs.clear();
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Resultados para "$searchQuery"',
+                  style: OptimizedTheme.heading2,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _searchBooks(),
+            child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+              future: _searchContent(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Colors.white));
                 }
                 
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                if (!snapshot.hasData) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1205,106 +1352,260 @@ class _SearchResultsTab extends StatelessWidget {
                   );
                 }
                 
-                return GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 0.75,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                final books = snapshot.data!['books']!;
+                final videos = snapshot.data!['videos']!;
+                
+                if (books.isEmpty && videos.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search_off, size: 80, color: Colors.white24),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No se encontraron resultados',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (books.isNotEmpty) ...[
+                        Text(
+                          'Libros (${books.length})',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: books.length,
+                          itemBuilder: (context, index) => _buildBookCard(context, books[index]),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (videos.isNotEmpty) ...[
+                        Text(
+                          'Videos (${videos.length})',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: videos.length,
+                          itemBuilder: (context, index) => _buildVideoCard(context, videos[index]),
+                        ),
+                      ],
+                    ],
                   ),
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final book = snapshot.data![index];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => BookDetailScreen(book: book),
-                        ),
-                      ),
-                      child: GlassmorphicContainer(
-                        width: double.infinity,
-                        height: double.infinity,
-                        borderRadius: 8,
-                        blur: 8,
-                        alignment: Alignment.center,
-                        border: 0,
-                        linearGradient: LinearGradient(
-                          colors: [
-                            Colors.white.withOpacity(0.15),
-                            Colors.white.withOpacity(0.08),
-                          ],
-                        ),
-                        borderGradient: LinearGradient(
-                          colors: [
-                            AppColors.yaviracOrange.withOpacity(0.3),
-                            Colors.white.withOpacity(0.1),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: Container(
-                                margin: const EdgeInsets.all(6),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: book['cover_url'] != null
-                                      ? Image.network(
-                                          book['cover_url'],
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          errorBuilder: (_, __, ___) => Container(
-                                            color: AppColors.yaviracOrange.withOpacity(0.2),
-                                            child: const Icon(Icons.search, size: 30, color: Colors.white),
-                                          ),
-                                        )
-                                      : Container(
-                                          color: AppColors.yaviracOrange.withOpacity(0.2),
-                                          child: const Icon(Icons.search, size: 30, color: Colors.white),
-                                        ),
-                                ),
-                              ),
-                            ),
-                            Flexible(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      book['title'] ?? 'Sin título',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    Text(
-                                      book['author'] ?? 'Autor desconocido',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 8,
-                                        color: Colors.white70,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBookCard(BuildContext context, Map<String, dynamic> book) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookDetailScreen(book: book),
+        ),
+      ),
+      child: GlassmorphicContainer(
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 8,
+        blur: 8,
+        alignment: Alignment.center,
+        border: 0,
+        linearGradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderGradient: LinearGradient(
+          colors: [
+            AppColors.yaviracOrange.withOpacity(0.3),
+            Colors.white.withOpacity(0.1),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: const EdgeInsets.all(6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: book['cover_url'] != null
+                      ? Image.network(
+                          book['cover_url'],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: AppColors.yaviracOrange.withOpacity(0.2),
+                            child: const Icon(Icons.book, size: 30, color: Colors.white),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.yaviracOrange.withOpacity(0.2),
+                          child: const Icon(Icons.book, size: 30, color: Colors.white),
+                        ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  children: [
+                    Text(
+                      book['title'] ?? 'Sin título',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      book['author'] ?? 'Autor desconocido',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 8,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoCard(BuildContext context, Map<String, dynamic> video) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MobileVideoPlayer(video: video),
+        ),
+      ),
+      child: GlassmorphicContainer(
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 8,
+        blur: 8,
+        alignment: Alignment.center,
+        border: 0,
+        linearGradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderGradient: LinearGradient(
+          colors: [
+            AppColors.yaviracBlueDark.withOpacity(0.3),
+            Colors.white.withOpacity(0.1),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: const EdgeInsets.all(6),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: video['thumbnail_url'] != null
+                          ? Image.network(
+                              video['thumbnail_url'],
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.yaviracBlueDark.withOpacity(0.2),
+                                child: const Icon(Icons.video_library, size: 30, color: Colors.white),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.yaviracBlueDark.withOpacity(0.2),
+                              child: const Icon(Icons.video_library, size: 30, color: Colors.white),
+                            ),
+                    ),
+                    const Center(
+                      child: Icon(
+                        Icons.play_circle_filled,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  children: [
+                    Text(
+                      video['title'] ?? 'Sin título',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      video['category'] ?? video['subcategory'] ?? 'Sin categoría',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 8,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

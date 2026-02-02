@@ -254,22 +254,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     width: 140,
                     height: 140,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: GlassTheme.neonCyan.withOpacity(0.3)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: GlassTheme.neonCyan.withOpacity(0.2),
-                          blurRadius: 30,
-                          spreadRadius: 5,
-                        ),
-                      ],
-                    ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(30),
                       child: Image.asset(
-                        'assets/images/yavirac.png',
+                        'assets/images/logo.jpeg',
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 70, color: Colors.white),
                       ),
@@ -454,7 +442,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      child: Icon(Icons.auto_stories, size: 50, color: GlassTheme.neonCyan),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/images/1.jpeg',
+                          width: 50,
+                          height: 50,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(Icons.auto_stories, size: 50, color: GlassTheme.neonCyan),
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Text(
