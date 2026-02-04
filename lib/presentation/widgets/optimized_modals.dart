@@ -255,16 +255,42 @@ class _AddBookFormState extends State<_AddBookForm> {
   final _fileUrlController = TextEditingController();
   final _coverUrlController = TextEditingController();
   
-  String _selectedCategory = 'Desarrollo de Software';
+  String? _selectedCategory;
+  List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
+  bool _loadingCategories = true;
 
-  final Map<String, List<String>> _categories = {
-    'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
-    'Marketing': ['Digital', 'Tradicional', 'Redes Sociales', 'SEO'],
-    'Guía Nacional de Turismo': ['Costas', 'Sierra', 'Oriente', 'Galápagos'],
-    'Arte Culinaria': ['Cocina Nacional', 'Cocina Internacional', 'Repostería', 'Bebidas'],
-    'Idiomas': ['Inglés', 'Francés', 'Alemán', 'Italiano']
-  };
+  @override
+  void initState() {
+    super.initState();
+    print('🚀 Iniciando formulario de libros...');
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    print('🔄 Cargando categorías para libros...');
+    try {
+      final response = await Supabase.instance.client
+          .from('categories')
+          .select()
+          .eq('is_active', true)
+          .order('name');
+      
+      print('✅ Categorías cargadas: ${response.length}');
+      print('📋 Datos: $response');
+      
+      setState(() {
+        _categories = List<Map<String, dynamic>>.from(response);
+        _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
+        _loadingCategories = false;
+      });
+      
+      print('🎯 Categoría seleccionada: $_selectedCategory');
+    } catch (e) {
+      print('❌ Error cargando categorías: $e');
+      setState(() => _loadingCategories = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -331,6 +357,32 @@ class _AddBookFormState extends State<_AddBookForm> {
   }
 
   Widget _buildDropdown() {
+    if (_loadingCategories) {
+      return Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text('No hay categorías disponibles', style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+
     return DropdownButtonFormField<String>(
       value: _selectedCategory,
       decoration: InputDecoration(
@@ -345,11 +397,11 @@ class _AddBookFormState extends State<_AddBookForm> {
       ),
       dropdownColor: AppColors.yaviracBlueDark,
       style: OptimizedTheme.bodyText,
-      items: _categories.keys.map((category) => DropdownMenuItem(
-        value: category,
-        child: Text(category),
+      items: _categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem<String>(
+        value: category['name'] as String,
+        child: Text(category['name'] as String),
       )).toList(),
-      onChanged: (value) => setState(() => _selectedCategory = value!),
+      onChanged: (value) => setState(() => _selectedCategory = value),
     );
   }
 
@@ -426,8 +478,34 @@ class _AddVideoFormState extends State<_AddVideoForm> {
   final _urlController = TextEditingController();
   final _descriptionController = TextEditingController();
   
-  String _selectedCategory = 'Desarrollo de Software';
+  String? _selectedCategory;
+  List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
+  bool _loadingCategories = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('categories')
+          .select()
+          .eq('is_active', true)
+          .order('name');
+      
+      setState(() {
+        _categories = List<Map<String, dynamic>>.from(response);
+        _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCategories = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -455,6 +533,8 @@ class _AddVideoFormState extends State<_AddVideoForm> {
               _buildInput(_urlController, 'URL del Video', Icons.link),
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
+              const SizedBox(height: 16),
+              _buildCategoryDropdown(),
               const SizedBox(height: 32),
               _buildSubmitButton(),
             ],
@@ -504,6 +584,55 @@ class _AddVideoFormState extends State<_AddVideoForm> {
                 style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.bold),
               ),
       ),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    if (_loadingCategories) {
+      return Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    if (_categories.isEmpty) {
+      return Container(
+        height: 60,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Text('No hay categorías disponibles', style: TextStyle(color: Colors.white)),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      value: _selectedCategory,
+      decoration: InputDecoration(
+        labelText: 'Categoría',
+        labelStyle: OptimizedTheme.bodyTextSmall,
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dropdownColor: AppColors.yaviracBlueDark,
+      style: OptimizedTheme.bodyText,
+      items: _categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem<String>(
+        value: category['name'] as String,
+        child: Text(category['name'] as String),
+      )).toList(),
+      onChanged: (value) => setState(() => _selectedCategory = value),
     );
   }
 

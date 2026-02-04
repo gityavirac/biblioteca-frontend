@@ -167,14 +167,30 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   }
 
   Future<void> _readBook() async {
+    print('📚 === INTENTANDO ABRIR LIBRO ===');
+    print('📚 Libro ID: ${widget.book['id']}');
+    print('📚 Título: ${widget.book['title']}');
+    print('📚 URL del archivo: ${widget.book['file_url']}');
+    print('📚 Formato: ${widget.book['format']}');
+    
     if (widget.book['file_url'] != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => FlipBookReader(book: widget.book),
-        ),
-      );
+      try {
+        print('✅ URL encontrada, navegando al lector...');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FlipBookReader(book: widget.book),
+          ),
+        );
+        print('✅ Navegación exitosa');
+      } catch (e) {
+        print('❌ Error al navegar al lector: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al abrir el libro: $e')),
+        );
+      }
     } else {
+      print('❌ No hay URL de archivo disponible');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No hay archivo disponible para este libro')),
       );

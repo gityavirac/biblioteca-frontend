@@ -92,28 +92,31 @@ class BookListWidget extends StatelessWidget {
                         ),
                         Container(
                           height: 60,
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Flexible(
+                              Expanded(
+                                flex: 3,
                                 child: Text(
                                   book['title'] ?? 'Sin título',
                                   style: GoogleFonts.outfit(
-                                    fontSize: 10,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                     color: Colors.white,
+                                    height: 1.2,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              Flexible(
+                              Expanded(
+                                flex: 1,
                                 child: Text(
                                   book['author'] ?? 'Autor desconocido',
                                   style: GoogleFonts.outfit(
-                                    fontSize: 8,
+                                    fontSize: 9,
                                     color: Colors.white70,
                                   ),
                                   maxLines: 1,

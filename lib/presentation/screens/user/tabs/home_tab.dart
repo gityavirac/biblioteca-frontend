@@ -51,7 +51,7 @@ class HomeTab extends StatelessWidget {
                   children: [
                     Text(
                       '¡Bienvenido!',
-                      style: OptimizedTheme.heading1.copyWith(
+                      style: OptimizedTheme.heading1.copyWith( // Header siempre tiene fondo oscuro (gradient), mantener blanco
                         fontSize: 32,
                         fontWeight: FontWeight.w700,
                       ),
@@ -59,7 +59,7 @@ class HomeTab extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       'Descubre miles de libros y videos educativos',
-                      style: OptimizedTheme.bodyText.copyWith(
+                      style: OptimizedTheme.bodyText.copyWith( // Header mantiene blanco
                         fontSize: 16,
                         color: Colors.white.withOpacity(0.9),
                       ),
@@ -145,6 +145,7 @@ class HomeTab extends StatelessWidget {
                   style: OptimizedTheme.heading3.copyWith(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
                 ),
               ],

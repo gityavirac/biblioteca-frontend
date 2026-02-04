@@ -8,6 +8,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../theme/glass_theme.dart';
 
 class FlipBookReader extends StatefulWidget {
@@ -78,7 +79,6 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   void _toggleFavorite() async {
-    print('🔥 DEBUG: _toggleFavorite() llamado');
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
@@ -120,21 +120,17 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
 
   void _handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
-      print('🔥 DEBUG: Tecla presionada: ${event.logicalKey}, _isFullScreen: $_isFullScreen');
       switch (event.logicalKey) {
         case LogicalKeyboardKey.escape:
-          print('🔥 DEBUG: ESC detectado, _isFullScreen: $_isFullScreen');
           if (_isFullScreen) {
-            print('🔥 DEBUG: ESC en pantalla completa - saliendo de fullscreen');
             setState(() {
               _isFullScreen = false;
               _showControls = true;
             });
-            return; // Evitar propagación
+            return;
           } else {
-            print('🔥 DEBUG: ESC normal - cerrando libro');
             Navigator.pop(context);
-            return; // Evitar propagación
+            return;
           }
         case LogicalKeyboardKey.arrowLeft:
         case LogicalKeyboardKey.arrowUp:
@@ -149,40 +145,93 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   void _toggleFullScreen() {
-    print('🔥 DEBUG: _toggleFullScreen() llamado - Estado actual: $_isFullScreen');
     setState(() {
       _isFullScreen = !_isFullScreen;
       _showControls = !_isFullScreen;
     });
-    print('🔥 DEBUG: _toggleFullScreen() - Nuevo estado: $_isFullScreen');
   }
 
   Future<void> _loadPdf() async {
+    print('📚 === CARGANDO PDF ===');
+    print('📚 Libro: ${widget.book['title']}');
+    print('📚 URL: ${widget.book['file_url']}');
+    print('📚 Es Web: $kIsWeb');
+    
     try {
       final url = widget.book['file_url'];
-      if (url == null) throw Exception('URL del libro no encontrada');
+      if (url == null) {
+        print('❌ URL del libro es null');
+        throw Exception('URL del libro no encontrada');
+      }
+      
+      print('✅ URL encontrada: $url');
 
       if (kIsWeb) {
-        final document = await PdfDocument.openUri(Uri.parse(url));
-        setState(() {
-          _document = document;
-          _isLoading = false;
-        });
-        return;
+        print('🌐 Cargando PDF en web...');
+        try {
+          final document = await PdfDocument.openUri(Uri.parse(url));
+          print('✅ PDF cargado exitosamente en web');
+          setState(() {
+            _document = document;
+            _isLoading = false;
+          });
+          return;
+        } catch (e) {
+          print('⚠️ Error CORS, intentando con proxy: $e');
+          try {
+            final proxyUrl = 'https://corsproxy.io/?${Uri.encodeComponent(url)}';
+            print('🔄 Intentando con proxy: $proxyUrl');
+            final document = await PdfDocument.openUri(Uri.parse(proxyUrl));
+            print('✅ PDF cargado con proxy');
+            setState(() {
+              _document = document;
+              _isLoading = false;
+            });
+            return;
+          } catch (proxyError) {
+            print('❌ Error con proxy corsproxy.io: $proxyError');
+            try {
+              // Intentar con otro proxy
+              final proxyUrl2 = 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(url)}';
+              print('🔄 Intentando con proxy alternativo: $proxyUrl2');
+              final document = await PdfDocument.openUri(Uri.parse(proxyUrl2));
+              print('✅ PDF cargado con proxy alternativo');
+              setState(() {
+                _document = document;
+                _isLoading = false;
+              });
+              return;
+            } catch (proxy2Error) {
+              print('❌ Error con proxy alternativo: $proxy2Error');
+              // Mostrar error en lugar de abrir externamente
+              setState(() {
+                _isLoading = false;
+                _errorMessage = 'No se pudo cargar el PDF. Verifica que la URL sea válida y accesible.';
+              });
+              return;
+            }
+          }
+        }
       }
 
+      print('📱 Cargando PDF en móvil...');
       final dir = await getApplicationDocumentsDirectory();
       final fileName = '${widget.book['id']}.pdf';
       final file = File('${dir.path}/$fileName');
+      print('📁 Ruta del archivo: ${file.path}');
 
       if (await file.exists()) {
+        print('✅ Archivo ya existe localmente');
         _openPdfFromFile(file.path);
         return;
       }
 
+      print('📥 Descargando archivo...');
       await Dio().download(url, file.path);
+      print('✅ Descarga completada');
       _openPdfFromFile(file.path);
     } catch (e) {
+      print('❌ Error cargando PDF: $e');
       setState(() {
         _isLoading = false;
         _errorMessage = 'Error descargando el libro: $e';
@@ -191,14 +240,23 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   Future<void> _openPdfFromFile(String path) async {
+    print('📝 === ABRIENDO PDF DESDE ARCHIVO ===');
+    print('📝 Ruta: $path');
+    
     try {
+      print('📝 Intentando abrir documento...');
       final document = await PdfDocument.openFile(path);
+      print('✅ Documento abierto exitosamente');
+      print('📝 Número de páginas: ${document.pages.length}');
+      
       setState(() {
         _localFilePath = path;
         _document = document;
         _isLoading = false;
       });
+      print('✅ Estado actualizado correctamente');
     } catch (e) {
+      print('❌ Error abriendo PDF desde archivo: $e');
       setState(() {
         _isLoading = false;
         _errorMessage = 'Error abriendo el PDF: $e';
@@ -207,7 +265,6 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   void _nextPage() {
-    print('🔥 DEBUG: _nextPage() llamado - Página actual: $_currentPage');
     if (_document != null && _currentPage < _document!.pages.length) {
       setState(() {
         _currentPage++;
@@ -216,7 +273,6 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   void _previousPage() {
-    print('🔥 DEBUG: _previousPage() llamado - Página actual: $_currentPage');
     if (_currentPage > 1) {
       setState(() {
         _currentPage--;
@@ -225,13 +281,11 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   void _toggleControls() {
-    print('🔥 DEBUG: _toggleControls() llamado - _isFullScreen: $_isFullScreen, _showControls: $_showControls');
     if (!_isFullScreen) {
       setState(() {
         _showControls = !_showControls;
       });
     } else {
-      // Si ya está en fullscreen, solo cambiar controles
       setState(() {
         _showControls = !_showControls;
       });
@@ -322,6 +376,14 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
               fontSize: 16,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Esto puede tomar unos segundos',
+            style: GoogleFonts.outfit(
+              color: Colors.white54,
+              fontSize: 12,
+            ),
+          ),
         ],
       ),
     );
@@ -391,10 +453,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
               ),
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                onPressed: () {
-                  print('🔥 DEBUG: Botón ATRÁS presionado');
-                  Navigator.pop(context);
-                },
+                onPressed: () => Navigator.pop(context),
               ),
             ),
             const SizedBox(width: 16),
@@ -441,10 +500,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
             _buildHeaderButton(
               icon: _isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
               color: Colors.white,
-              onTap: () {
-                print('🔥 DEBUG: Botón PANTALLA COMPLETA presionado');
-                _toggleFullScreen();
-              },
+              onTap: _toggleFullScreen,
             ),
           ],
         ),
@@ -479,10 +535,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            print('🔥 DEBUG: HeaderButton presionado');
-            onTap();
-          },
+          onTap: onTap,
           borderRadius: BorderRadius.circular(22.5),
           child: Container(
             width: 45,
@@ -618,7 +671,6 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
             icon: _isDarkMode ? Icons.light_mode : Icons.dark_mode,
             color: Colors.white,
             onTap: () {
-              print('🔥 DEBUG: Botón MODO OSCURO presionado');
               setState(() {
                 _isDarkMode = !_isDarkMode;
               });
@@ -699,10 +751,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
         Expanded(
           flex: 4, 
           child: GestureDetector(
-            onTap: () {
-              print('🔥 DEBUG: Clic en centro - activando fullscreen');
-              _toggleFullScreen();
-            },
+            onTap: _toggleFullScreen,
             child: Container(
               color: Colors.transparent,
             ),

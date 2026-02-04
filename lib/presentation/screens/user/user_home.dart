@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,7 +10,9 @@ import '../../../data/services/supabase_auth_service.dart';
 import '../../../core/services/lazy_loading_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/optimized_theme.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
 import '../../../main.dart';
 import 'tabs/home_tab.dart';
@@ -16,6 +20,7 @@ import 'tabs/library_tab.dart';
 import 'tabs/videos_tab.dart';
 import '../admin/add_book_screen.dart';
 import '../admin/add_video_screen.dart';
+import '../admin/categories_management_screen.dart';
 import 'users_management_screen.dart';
 import 'book_detail_screen.dart';
 import 'mobile_video_player.dart';
@@ -144,6 +149,8 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         return const _UserManagementTab();
       case 8:
         return const _RequestsTab();
+      case 9:
+        return const _CategoriesManagementTab();
       default:
         return HomeTab(searchQuery: _searchQuery);
     }
@@ -154,12 +161,22 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     // Para móvil (APK) usar Drawer y BottomNavigationBar, para web usar sidebar fijo
     final isMobile = !kIsWeb;
     
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
     return Scaffold(
       drawer: isMobile ? _buildDrawer() : null,
       bottomNavigationBar: isMobile ? _buildBottomNavigationBar() : null,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
+        decoration: BoxDecoration(
+          gradient: isDark ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0F172A),
+              Color(0xFF1E293B),
+            ],
+          ) : OptimizedTheme.primaryGradientLight,
         ),
         child: Row(
           children: [
@@ -236,14 +253,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
       backgroundColor: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.yaviracBlueDark.withOpacity(0.9),
-              AppColors.yaviracOrange.withOpacity(0.95),
-            ],
-          ),
+          gradient: Theme.of(context).brightness == Brightness.dark 
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0F172A),
+                    Color(0xFF1E293B),
+                  ],
+                )
+              : OptimizedTheme.primaryGradientLight,
         ),
         child: Column(
           children: [
@@ -260,14 +279,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.yaviracBlueDark.withOpacity(0.9),
-            AppColors.yaviracOrange.withOpacity(0.95),
-          ],
-        ),
+        gradient: Theme.of(context).brightness == Brightness.dark 
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0F172A),
+                    Color(0xFF1E293B),
+                  ],
+                )
+              : OptimizedTheme.primaryGradientLight,
       ),
       child: Column(
         children: [
@@ -326,7 +347,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                     children: [
                       Text(
                         _userName,
-                        style: OptimizedTheme.bodyText.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+                        style: OptimizedTheme.getBodyText(context).copyWith(fontSize: 14, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Container(
@@ -369,13 +390,27 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
           const Divider(color: Colors.white24, height: 32),
           _buildMenuItem(Icons.trending_up, 'Top 10 Libros', 5),
           if (_canEdit) _buildMenuItem(Icons.add, 'Agregar Contenido', 6),
+          if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.category, 'Gestionar Categorías', 9),
           if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.people, 'Gestión de Usuarios', 7),
           if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.help_center, 'Solicitudes', 8),
           _buildMenuItem(Icons.settings, 'Configuración', -1, onTap: () => setState(() => _selectedIndex = 4)),
           ListTile(
-            leading: const Icon(Icons.dark_mode, color: Colors.white70),
-            title: const Text('Modo Oscuro', style: TextStyle(color: Colors.white)),
-            onTap: () {},
+            leading: Icon(Icons.dark_mode, color: OptimizedTheme.getTextColor(context).withOpacity(0.7)),
+            title: Text('Modo Oscuro', style: TextStyle(color: OptimizedTheme.getTextColor(context))),
+            trailing: Switch(
+              value: Provider.of<ThemeProvider>(context).isDarkMode,
+              onChanged: (value) {
+                Provider.of<ThemeProvider>(context, listen: false).toggleTheme(value);
+                // Limpiar caché al cambiar tema
+                setState(() => _cachedTabs.clear());
+              },
+              activeColor: AppColors.yaviracOrange,
+            ),
+            onTap: () {
+               final provider = Provider.of<ThemeProvider>(context, listen: false);
+               provider.toggleTheme(!provider.isDarkMode);
+               setState(() => _cachedTabs.clear());
+            },
           ),
         ],
       ),
@@ -455,13 +490,57 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               ),
             if (isMobile) const SizedBox(width: 16),
             if (!isMobile) const Spacer(),
-            Text(
-              'Repositorio Digital Alfredo Costales',
-              style: OptimizedTheme.heading2.copyWith(
-                fontSize: isMobile ? 16 : 20,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-                color: Colors.white,
+            Flexible(
+              flex: 8,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      OptimizedTheme.getTextColor(context).withOpacity(0.1),
+                      OptimizedTheme.getTextColor(context).withOpacity(0.05),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: OptimizedTheme.getTextColor(context).withOpacity(0.2)),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.fitWidth,
+                      child: Text(
+                        'Repositorio Digital de la Biblioteca',
+                        style: OptimizedTheme.heading2.copyWith(
+                          fontSize: 80,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 15.0,
+                          color: OptimizedTheme.getTextColor(context),
+                          height: 1.0,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.fitWidth,
+                      child: Text(
+                        'Alfredo Costales y Piedad Peñaherrera',
+                        style: OptimizedTheme.heading2.copyWith(
+                          fontSize: 60,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 12.0,
+                          color: OptimizedTheme.getTextColor(context).withOpacity(0.9),
+                          height: 1.0,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const Spacer(),
@@ -661,13 +740,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Icon(icon, color: Colors.white, size: 24),
+                  Icon(icon, color: isSelected 
+                      ? Colors.white 
+                      : OptimizedTheme.getTextColor(context).withOpacity(0.7), size: 24),
                   const SizedBox(width: 16),
                   Text(
                     title,
-                    style: OptimizedTheme.bodyText.copyWith(
+                    style: OptimizedTheme.getBodyText(context).copyWith(
                       fontSize: 16,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: isSelected ? Colors.white : OptimizedTheme.getTextColor(context),
                     ),
                   ),
                 ],
@@ -1633,6 +1715,145 @@ class _TopBooksTabState extends State<_TopBooksTab> {
     }
   }
 
+  Future<void> _exportStats([String format = 'csv']) async {
+    try {
+      // Obtener todas las estadísticas
+      final stats = await Supabase.instance.client
+          .from('book_stats')
+          .select('*, books(title, author, category)')
+          .order('open_count', ascending: false);
+      
+      String content;
+      String fileName;
+      String mimeType;
+      
+      switch (format) {
+        case 'json':
+          content = jsonEncode(stats);
+          fileName = 'estadisticas_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.json';
+          mimeType = 'application/json';
+          break;
+        case 'html':
+          content = _generateHtmlReport(stats);
+          fileName = 'reporte_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.html';
+          mimeType = 'text/html';
+          break;
+        default: // csv
+          content = _generateCsv(stats);
+          fileName = 'estadisticas_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.csv';
+          mimeType = 'text/csv';
+      }
+      
+      // Crear blob y descargar
+      final bytes = utf8.encode(content);
+      final blob = html.Blob([bytes], mimeType);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Estadísticas exportadas en formato ${format.toUpperCase()}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error: $e')),
+      );
+    }
+  }
+
+  String _generateCsv(List<dynamic> stats) {
+    String csv = 'Título,Autor,Categoría,Veces Abierto,Última Apertura\n';
+    for (var stat in stats) {
+      final book = stat['books'];
+      csv += '"${book['title'] ?? 'Sin título'}",';
+      csv += '"${book['author'] ?? 'Sin autor'}",';
+      csv += '"${book['category'] ?? 'Sin categoría'}",';
+      csv += '${stat['open_count'] ?? 0},';
+      csv += '"${_formatDate(stat['updated_at'])}"\n';
+    }
+    return csv;
+  }
+
+  String _generateHtmlReport(List<dynamic> stats) {
+    final now = DateTime.now();
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reporte de Estadísticas - Biblioteca</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #1E3A8A; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .stats { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>📊 Reporte de Estadísticas de la Biblioteca</h1>
+    <div class="stats">
+        <p><strong>Fecha del reporte:</strong> ${now.day}/${now.month}/${now.year}</p>
+        <p><strong>Total de libros con estadísticas:</strong> ${stats.length}</p>
+        <p><strong>Total de aperturas:</strong> ${stats.fold<int>(0, (sum, stat) => sum + ((stat['open_count'] as int?) ?? 0))}</p>
+    </div>
+    <table>
+        <tr>
+            <th>Posición</th>
+            <th>Título</th>
+            <th>Autor</th>
+            <th>Categoría</th>
+            <th>Veces Abierto</th>
+            <th>Última Apertura</th>
+        </tr>
+${stats.asMap().entries.map((entry) {
+      final index = entry.key + 1;
+      final stat = entry.value;
+      final book = stat['books'];
+      return '''        <tr>
+            <td>$index</td>
+            <td>${book['title'] ?? 'Sin título'}</td>
+            <td>${book['author'] ?? 'Sin autor'}</td>
+            <td>${book['category'] ?? 'Sin categoría'}</td>
+            <td>${stat['open_count'] ?? 0}</td>
+            <td>${_formatDate(stat['updated_at'])}</td>
+        </tr>''';
+    }).join('\n')}
+    </table>
+</body>
+</html>''';
+  }
+
+  Future<bool> _isAdmin() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+      
+      final userData = await Supabase.instance.client
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+      
+      final role = userData['role']?.toString().toLowerCase() ?? '';
+      return role == 'admin' || role == 'administrador';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1640,9 +1861,76 @@ class _TopBooksTabState extends State<_TopBooksTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Top 10 Libros Más Leídos',
-            style: OptimizedTheme.heading2,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Top 10 Libros Más Leídos',
+                  style: OptimizedTheme.heading2,
+                ),
+              ),
+              // Botón de exportar solo para admins
+              FutureBuilder<bool>(
+                future: _isAdmin(),
+                builder: (context, snapshot) {
+                  if (snapshot.data == true) {
+                    return PopupMenuButton<String>(
+                      onSelected: (format) => _exportStats(format),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'csv',
+                          child: Row(
+                            children: [
+                              Icon(Icons.table_chart, size: 16),
+                              SizedBox(width: 8),
+                              Text('CSV (Excel)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'json',
+                          child: Row(
+                            children: [
+                              Icon(Icons.code, size: 16),
+                              SizedBox(width: 8),
+                              Text('JSON (Datos)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'html',
+                          child: Row(
+                            children: [
+                              Icon(Icons.web, size: 16),
+                              SizedBox(width: 8),
+                              Text('HTML (Reporte)'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.yaviracOrange,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.download, size: 16, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text('Exportar', style: TextStyle(color: Colors.white)),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_drop_down, size: 16, color: Colors.white),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -1818,6 +2106,15 @@ class _UserManagementTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const UsersManagementScreen();
+  }
+}
+
+class _CategoriesManagementTab extends StatelessWidget {
+  const _CategoriesManagementTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CategoriesManagementScreen();
   }
 }
 
