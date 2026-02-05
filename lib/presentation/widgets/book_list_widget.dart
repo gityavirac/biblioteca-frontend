@@ -193,9 +193,11 @@ class BookListWidget extends StatelessWidget {
     final coverUrlController = TextEditingController(text: book['cover_url'] ?? '');
     final isbnController = TextEditingController(text: book['isbn'] ?? '');
     final yearController = TextEditingController(text: book['year']?.toString() ?? '');
+    final locationController = TextEditingController(text: book['physical_location'] ?? '');
     
     String selectedFormat = book['format'] ?? 'pdf';
     String selectedCategory = book['category'] ?? 'General';
+    bool isPhysical = book['is_physical'] ?? false;
     
     showDialog(
       context: context,
@@ -330,6 +332,38 @@ class BookListWidget extends StatelessWidget {
                       );
                     },
                   ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Libro Físico', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+                        CheckboxListTile(
+                          title: Text('¿Es un libro físico?', style: GoogleFonts.outfit(color: Colors.white70)),
+                          value: isPhysical,
+                          onChanged: (value) => setState(() => isPhysical = value ?? false),
+                          activeColor: Colors.orange,
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                        if (isPhysical)
+                          TextField(
+                            controller: locationController,
+                            style: GoogleFonts.outfit(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Ubicación en biblioteca',
+                              labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                              focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -352,6 +386,8 @@ class BookListWidget extends StatelessWidget {
                     'year': yearController.text.isEmpty ? null : int.tryParse(yearController.text),
                     'format': selectedFormat,
                     'category': selectedCategory,
+                    'is_physical': isPhysical,
+                    'physical_location': isPhysical ? locationController.text : null,
                   }).eq('id', book['id']);
                   
                   Navigator.pop(context);

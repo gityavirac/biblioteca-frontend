@@ -268,6 +268,8 @@ class _AddBookFormState extends State<_AddBookForm> {
   Uint8List? _selectedFile;
   String? _selectedFileName;
   bool _uploadingFile = false;
+  bool _isPhysical = false;
+  final _locationController = TextEditingController();
 
   @override
   void initState() {
@@ -326,7 +328,7 @@ class _AddBookFormState extends State<_AddBookForm> {
               const SizedBox(height: 16),
               _buildFileUploadSection(),
               const SizedBox(height: 16),
-              _buildInput(_coverUrlController, 'URL de la portada', Icons.image),
+              _buildInput(_coverUrlController, 'URL de la portada (opcional)', Icons.image),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -337,6 +339,8 @@ class _AddBookFormState extends State<_AddBookForm> {
                   Expanded(child: _buildFormatDropdown()),
                 ],
               ),
+              const SizedBox(height: 16),
+              _buildPhysicalBookSection(),
               const SizedBox(height: 16),
               _buildCategoryDropdown(),
               const SizedBox(height: 32),
@@ -513,6 +517,8 @@ class _AddBookFormState extends State<_AddBookForm> {
         'category': _selectedCategory,
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
+        'is_physical': _isPhysical,
+        'physical_location': _isPhysical ? _locationController.text : null,
       });
 
       if (mounted) {
@@ -697,6 +703,41 @@ class _AddBookFormState extends State<_AddBookForm> {
       setState(() => _uploadingFile = false);
     }
   }
+
+  Widget _buildPhysicalBookSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.library_books, color: AppColors.yaviracOrange),
+              const SizedBox(width: 8),
+              Text('Libro Físico', style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          CheckboxListTile(
+            title: Text('¿Es un libro físico disponible en biblioteca?', style: OptimizedTheme.bodyTextSmall),
+            value: _isPhysical,
+            onChanged: (value) => setState(() => _isPhysical = value ?? false),
+            activeColor: AppColors.yaviracOrange,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+          if (_isPhysical) ...[
+            const SizedBox(height: 16),
+            _buildInput(_locationController, 'Ubicación en biblioteca', Icons.location_on),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 // Formulario optimizado para agregar videos
@@ -713,6 +754,7 @@ class _AddVideoFormState extends State<_AddVideoForm> {
   final _titleController = TextEditingController();
   final _urlController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _thumbnailController = TextEditingController();
   
   String? _selectedCategory;
   List<Map<String, dynamic>> _categories = [];
@@ -767,6 +809,8 @@ class _AddVideoFormState extends State<_AddVideoForm> {
               _buildInput(_titleController, 'Título del Video', Icons.video_library),
               const SizedBox(height: 16),
               _buildInput(_urlController, 'URL del Video', Icons.link),
+              const SizedBox(height: 16),
+              _buildInput(_thumbnailController, 'URL de la portada (opcional)', Icons.image),
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
               const SizedBox(height: 16),
@@ -888,6 +932,7 @@ class _AddVideoFormState extends State<_AddVideoForm> {
         'video_id': _urlController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'category': _selectedCategory,
+        'thumbnail_url': _thumbnailController.text.isEmpty ? null : _thumbnailController.text,
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
 

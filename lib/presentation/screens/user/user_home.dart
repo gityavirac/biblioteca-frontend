@@ -489,61 +489,27 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                 ),
               ),
             if (isMobile) const SizedBox(width: 16),
-            if (!isMobile) const Spacer(),
-            Flexible(
-              flex: 8,
+            Expanded(
+              flex: 20,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      OptimizedTheme.getTextColor(context).withOpacity(0.1),
-                      OptimizedTheme.getTextColor(context).withOpacity(0.05),
-                    ],
+                child: Center(
+                  child: Text(
+                    'Repositorio Digital de la Biblioteca Alfredo Costales y Piedad Peñaherrera',
+                    style: OptimizedTheme.heading2.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: OptimizedTheme.getTextColor(context),
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: OptimizedTheme.getTextColor(context).withOpacity(0.2)),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.fitWidth,
-                      child: Text(
-                        'Repositorio Digital de la Biblioteca',
-                        style: OptimizedTheme.heading2.copyWith(
-                          fontSize: 80,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 15.0,
-                          color: OptimizedTheme.getTextColor(context),
-                          height: 1.0,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    FittedBox(
-                      fit: BoxFit.fitWidth,
-                      child: Text(
-                        'Alfredo Costales y Piedad Peñaherrera',
-                        style: OptimizedTheme.heading2.copyWith(
-                          fontSize: 60,
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: 12.0,
-                          color: OptimizedTheme.getTextColor(context).withOpacity(0.9),
-                          height: 1.0,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
-            const Spacer(),
             // Campo de búsqueda para móvil y web
             if (isMobile) _buildMobileSearchField(),
             if (!isMobile) _buildSearchField(),

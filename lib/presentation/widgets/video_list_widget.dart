@@ -199,10 +199,138 @@ class VideoListWidget extends StatelessWidget {
 
   void _handleMenuAction(String action, Map<String, dynamic> video, BuildContext context) {
     if (action == 'edit') {
-      // TODO: Implement edit functionality
+      _showEditDialog(context, video);
     } else if (action == 'delete' && userRole == 'admin') {
       _showDeleteDialog(context, video);
     }
+  }
+
+  void _showEditDialog(BuildContext context, Map<String, dynamic> video) {
+    final titleController = TextEditingController(text: video['title'] ?? '');
+    final urlController = TextEditingController(text: video['video_id'] ?? '');
+    final descriptionController = TextEditingController(text: video['description'] ?? '');
+    final thumbnailController = TextEditingController(text: video['thumbnail_url'] ?? '');
+    String selectedCategory = video['category'] ?? 'General';
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: Text('Editar Video', style: GoogleFonts.outfit(color: Colors.white)),
+          content: SizedBox(
+            width: 500,
+            height: 400,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Título',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: urlController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'URL del Video',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: thumbnailController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'URL de la portada (opcional)',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Descripción',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const CircularProgressIndicator(color: Colors.white);
+                      }
+                      final categories = snapshot.data!;
+                      return DropdownButtonFormField<String>(
+                        value: categories.any((cat) => cat['name'] == selectedCategory) ? selectedCategory : categories.first['name'],
+                        style: GoogleFonts.outfit(color: Colors.white),
+                        dropdownColor: const Color(0xFF1E293B),
+                        decoration: InputDecoration(
+                          labelText: 'Categoría',
+                          labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                        ),
+                        items: categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem(
+                          value: category['name'],
+                          child: Text(category['name']),
+                        )).toList(),
+                        onChanged: (value) => setState(() => selectedCategory = value!),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar', style: GoogleFonts.outfit(color: Colors.white70)),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await Supabase.instance.client.from('videos').update({
+                    'title': titleController.text,
+                    'video_id': urlController.text,
+                    'description': descriptionController.text.isEmpty ? null : descriptionController.text,
+                    'category': selectedCategory,
+                    'thumbnail_url': thumbnailController.text.isEmpty ? null : thumbnailController.text,
+                  }).eq('id', video['id']);
+                  
+                  Navigator.pop(context);
+                  onRefresh();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Video actualizado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al actualizar: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              child: Text('Guardar', style: GoogleFonts.outfit(color: Colors.orange)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showDeleteDialog(BuildContext context, Map<String, dynamic> video) {

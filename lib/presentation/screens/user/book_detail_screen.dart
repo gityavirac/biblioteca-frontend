@@ -399,6 +399,10 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           _buildInfoRow(Icons.category, 'Categoría', widget.book['category'] ?? 'General'),
           const Divider(color: Colors.white24, height: 24),
           _buildInfoRow(Icons.description, 'Formato', widget.book['format']?.toUpperCase() ?? 'PDF'),
+          if (widget.book['is_physical'] == true) ...[
+            const Divider(color: Colors.white24, height: 24),
+            _buildPhysicalBookInfo(),
+          ],
         ],
       ),
     );
@@ -437,7 +441,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            widget.book['description'],
+            widget.book['description'].replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim(),
             style: GoogleFonts.outfit(
               fontSize: 16,
               color: Colors.white70,
@@ -490,6 +494,60 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPhysicalBookInfo() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.library_books, color: Colors.green, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Libro Físico Disponible',
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.white70, size: 16),
+              const SizedBox(width: 8),
+              Text(
+                'Ubicación:',
+                style: GoogleFonts.outfit(
+                  fontSize: 14,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.book['physical_location'] ?? 'No especificada',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

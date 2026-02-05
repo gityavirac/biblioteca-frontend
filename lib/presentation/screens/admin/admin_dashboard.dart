@@ -571,8 +571,7 @@ class _VideosTabState extends State<_VideosTab> {
 
       await Supabase.instance.client.from('videos').insert({
         'title': title,
-        'video_url': url,
-        'video_id': videoId,
+        'video_id': url,
         'category': category.isEmpty ? 'General' : category,
         'description': description,
         'thumbnail_url': 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
