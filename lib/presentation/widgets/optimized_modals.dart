@@ -254,7 +254,10 @@ class _AddBookFormState extends State<_AddBookForm> {
   final _descriptionController = TextEditingController();
   final _fileUrlController = TextEditingController();
   final _coverUrlController = TextEditingController();
+  final _isbnController = TextEditingController();
+  final _yearController = TextEditingController();
   
+  String _selectedFormat = 'pdf';
   String? _selectedCategory;
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
@@ -263,12 +266,10 @@ class _AddBookFormState extends State<_AddBookForm> {
   @override
   void initState() {
     super.initState();
-    print('🚀 Iniciando formulario de libros...');
     _loadCategories();
   }
 
   Future<void> _loadCategories() async {
-    print('🔄 Cargando categorías para libros...');
     try {
       final response = await Supabase.instance.client
           .from('categories')
@@ -276,18 +277,12 @@ class _AddBookFormState extends State<_AddBookForm> {
           .eq('is_active', true)
           .order('name');
       
-      print('✅ Categorías cargadas: ${response.length}');
-      print('📋 Datos: $response');
-      
       setState(() {
         _categories = List<Map<String, dynamic>>.from(response);
         _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
         _loadingCategories = false;
       });
-      
-      print('🎯 Categoría seleccionada: $_selectedCategory');
     } catch (e) {
-      print('❌ Error cargando categorías: $e');
       setState(() => _loadingCategories = false);
     }
   }
@@ -313,17 +308,31 @@ class _AddBookFormState extends State<_AddBookForm> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              _buildInput(_titleController, 'Título', Icons.title),
-              const SizedBox(height: 16),
-              _buildInput(_authorController, 'Autor', Icons.person),
+              Row(
+                children: [
+                  Expanded(child: _buildInput(_titleController, 'Título', Icons.title)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildInput(_authorController, 'Autor', Icons.person)),
+                ],
+              ),
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
               const SizedBox(height: 16),
-              _buildInput(_fileUrlController, 'URL del PDF', Icons.link),
+              _buildInput(_fileUrlController, 'URL del archivo (PDF/EPUB)', Icons.link),
               const SizedBox(height: 16),
               _buildInput(_coverUrlController, 'URL de la portada', Icons.image),
               const SizedBox(height: 16),
-              _buildDropdown(),
+              Row(
+                children: [
+                  Expanded(child: _buildInput(_isbnController, 'ISBN', Icons.qr_code)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildInput(_yearController, 'Año', Icons.calendar_today, keyboardType: TextInputType.number)),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildFormatDropdown()),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildCategoryDropdown(),
               const SizedBox(height: 32),
               _buildSubmitButton(),
             ],
@@ -333,10 +342,11 @@ class _AddBookFormState extends State<_AddBookForm> {
     );
   }
 
-  Widget _buildInput(TextEditingController controller, String label, IconData icon, {int maxLines = 1}) {
+  Widget _buildInput(TextEditingController controller, String label, IconData icon, {int maxLines = 1, TextInputType? keyboardType}) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
+      keyboardType: keyboardType,
       style: OptimizedTheme.bodyText,
       decoration: InputDecoration(
         labelText: label,
@@ -356,7 +366,30 @@ class _AddBookFormState extends State<_AddBookForm> {
     );
   }
 
-  Widget _buildDropdown() {
+  Widget _buildFormatDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedFormat,
+      decoration: InputDecoration(
+        labelText: 'Formato',
+        labelStyle: OptimizedTheme.bodyTextSmall,
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dropdownColor: AppColors.yaviracBlueDark,
+      style: OptimizedTheme.bodyText,
+      items: ['pdf', 'epub'].map<DropdownMenuItem<String>>((format) => DropdownMenuItem<String>(
+        value: format,
+        child: Text(format.toUpperCase()),
+      )).toList(),
+      onChanged: (value) => setState(() => _selectedFormat = value!),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
     if (_loadingCategories) {
       return Container(
         height: 60,
@@ -428,7 +461,7 @@ class _AddBookFormState extends State<_AddBookForm> {
   Future<void> _submitBook() async {
     if (_titleController.text.isEmpty || _authorController.text.isEmpty || _fileUrlController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa los campos obligatorios')),
+        const SnackBar(content: Text('Completa título, autor y URL del archivo')),
       );
       return;
     }
@@ -442,7 +475,11 @@ class _AddBookFormState extends State<_AddBookForm> {
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'file_url': _fileUrlController.text,
         'cover_url': _coverUrlController.text.isEmpty ? null : _coverUrlController.text,
+        'isbn': _isbnController.text.isEmpty ? null : _isbnController.text,
+        'year': _yearController.text.isEmpty ? null : int.tryParse(_yearController.text),
+        'format': _selectedFormat,
         'category': _selectedCategory,
+        'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
 

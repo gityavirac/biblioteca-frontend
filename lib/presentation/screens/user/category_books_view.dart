@@ -73,7 +73,7 @@ class CategoryBooksView extends StatelessWidget {
           const SizedBox(height: 24),
           
           // Subcategorías
-          ...categories[category]!.map((subcategory) {
+          ...(categories[category] ?? []).map((subcategory) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

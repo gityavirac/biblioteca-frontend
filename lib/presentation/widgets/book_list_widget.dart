@@ -179,10 +179,198 @@ class BookListWidget extends StatelessWidget {
 
   void _handleMenuAction(String action, Map<String, dynamic> book, BuildContext context) {
     if (action == 'edit') {
-      // TODO: Implement edit functionality
+      _showEditDialog(context, book);
     } else if (action == 'delete' && userRole == 'admin') {
       _showDeleteDialog(context, book);
     }
+  }
+
+  void _showEditDialog(BuildContext context, Map<String, dynamic> book) {
+    final titleController = TextEditingController(text: book['title'] ?? '');
+    final authorController = TextEditingController(text: book['author'] ?? '');
+    final descriptionController = TextEditingController(text: book['description'] ?? '');
+    final fileUrlController = TextEditingController(text: book['file_url'] ?? '');
+    final coverUrlController = TextEditingController(text: book['cover_url'] ?? '');
+    final isbnController = TextEditingController(text: book['isbn'] ?? '');
+    final yearController = TextEditingController(text: book['year']?.toString() ?? '');
+    
+    String selectedFormat = book['format'] ?? 'pdf';
+    String selectedCategory = book['category'] ?? 'General';
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: Text('Editar Libro', style: GoogleFonts.outfit(color: Colors.white)),
+          content: SizedBox(
+            width: 500,
+            height: 600,
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  TextField(
+                    controller: titleController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Título',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: authorController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Autor',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Descripción',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: fileUrlController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'URL del archivo',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: coverUrlController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'URL de la portada',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: isbnController,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'ISBN',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: yearController,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Año',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedFormat,
+                    style: GoogleFonts.outfit(color: Colors.white),
+                    dropdownColor: const Color(0xFF1E293B),
+                    decoration: InputDecoration(
+                      labelText: 'Formato',
+                      labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                      enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                      focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                    ),
+                    items: ['pdf', 'epub'].map((format) => DropdownMenuItem(
+                      value: format,
+                      child: Text(format.toUpperCase()),
+                    )).toList(),
+                    onChanged: (value) => setState(() => selectedFormat = value!),
+                  ),
+                  const SizedBox(height: 16),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const CircularProgressIndicator(color: Colors.white);
+                      }
+                      final categories = snapshot.data!;
+                      return DropdownButtonFormField<String>(
+                        value: categories.any((cat) => cat['name'] == selectedCategory) ? selectedCategory : categories.first['name'],
+                        style: GoogleFonts.outfit(color: Colors.white),
+                        dropdownColor: const Color(0xFF1E293B),
+                        decoration: InputDecoration(
+                          labelText: 'Categoría',
+                          labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                        ),
+                        items: categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem(
+                          value: category['name'],
+                          child: Text(category['name']),
+                        )).toList(),
+                        onChanged: (value) => setState(() => selectedCategory = value!),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancelar', style: GoogleFonts.outfit(color: Colors.white70)),
+            ),
+            TextButton(
+              onPressed: () async {
+                try {
+                  await Supabase.instance.client.from('books').update({
+                    'title': titleController.text,
+                    'author': authorController.text,
+                    'description': descriptionController.text.isEmpty ? null : descriptionController.text,
+                    'file_url': fileUrlController.text,
+                    'cover_url': coverUrlController.text.isEmpty ? null : coverUrlController.text,
+                    'isbn': isbnController.text.isEmpty ? null : isbnController.text,
+                    'year': yearController.text.isEmpty ? null : int.tryParse(yearController.text),
+                    'format': selectedFormat,
+                    'category': selectedCategory,
+                  }).eq('id', book['id']);
+                  
+                  Navigator.pop(context);
+                  onRefresh();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Libro actualizado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al actualizar: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              child: Text('Guardar', style: GoogleFonts.outfit(color: Colors.orange)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showDeleteDialog(BuildContext context, Map<String, dynamic> book) {

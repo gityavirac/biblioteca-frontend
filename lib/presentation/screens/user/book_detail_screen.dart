@@ -368,7 +368,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
           style: GoogleFonts.outfit(
             fontSize: 20,
             fontWeight: FontWeight.w500,
-            color: GlassTheme.primaryColor,
+            color: Colors.white.withOpacity(0.9),
           ),
         ),
       ],

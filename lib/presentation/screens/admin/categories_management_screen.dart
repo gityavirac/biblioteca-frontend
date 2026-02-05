@@ -153,116 +153,106 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Gestión de Categorías',
-                        style: OptimizedTheme.heading2,
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _showCreateDialog,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Nueva'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.yaviracOrange,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: AppColors.primaryGradient,
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Gestión de Categorías',
+                    style: OptimizedTheme.heading2,
+                  ),
                 ),
-              ),
-              
-              // Content
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                    : _categories.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No hay categorías',
-                              style: OptimizedTheme.bodyText,
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _categories.length,
-                            itemBuilder: (context, index) {
-                              final category = _categories[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: GlassmorphicContainer(
-                                  width: double.infinity,
-                                  height: 80,
-                                  borderRadius: 12,
-                                  blur: 10,
-                                  alignment: Alignment.center,
-                                  border: 0,
-                                  linearGradient: LinearGradient(
-                                    colors: [
-                                      Colors.white.withOpacity(0.1),
-                                      Colors.white.withOpacity(0.05),
-                                    ],
-                                  ),
-                                  borderGradient: LinearGradient(
-                                    colors: [
-                                      Colors.white.withOpacity(0.2),
-                                      Colors.white.withOpacity(0.1),
-                                    ],
-                                  ),
-                                  child: ListTile(
-                                    leading: Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.yaviracOrange.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Icon(Icons.category, color: Colors.white),
-                                    ),
-                                    title: Text(
-                                      category['name'],
-                                      style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
-                                    ),
-                                    subtitle: category['description'] != null && category['description'].toString().isNotEmpty
-                                        ? Text(
-                                            category['description'],
-                                            style: OptimizedTheme.bodyTextSmall,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          )
-                                        : null,
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
-                                      onPressed: () => _showDeleteDialog(category),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-              ),
-            ],
+                ElevatedButton.icon(
+                  onPressed: _showCreateDialog,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Nueva'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.yaviracOrange,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+          
+          // Content
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                : _categories.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No hay categorías',
+                          style: OptimizedTheme.bodyText,
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _categories.length,
+                        itemBuilder: (context, index) {
+                          final category = _categories[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: GlassmorphicContainer(
+                              width: double.infinity,
+                              height: 80,
+                              borderRadius: 12,
+                              blur: 10,
+                              alignment: Alignment.center,
+                              border: 0,
+                              linearGradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withOpacity(0.1),
+                                  Colors.white.withOpacity(0.05),
+                                ],
+                              ),
+                              borderGradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withOpacity(0.2),
+                                  Colors.white.withOpacity(0.1),
+                                ],
+                              ),
+                              child: ListTile(
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.yaviracOrange.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.category, color: Colors.white),
+                                ),
+                                title: Text(
+                                  category['name'],
+                                  style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: category['description'] != null && category['description'].toString().isNotEmpty
+                                    ? Text(
+                                        category['description'],
+                                        style: OptimizedTheme.bodyTextSmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    : null,
+                                trailing: IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _showDeleteDialog(category),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

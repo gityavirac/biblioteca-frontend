@@ -345,10 +345,7 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
             gradient: GlassTheme.glassDecoration.gradient,
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
