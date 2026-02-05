@@ -213,17 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.yaviracBlue.withOpacity(0.8),
-                AppColors.yaviracBlueDark.withOpacity(0.6),
-                AppColors.yaviracBlue.withOpacity(0.8),
-              ],
-            ),
-          ),
+          // Sin overlay azul, solo la imagen de fondo
           child: LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth > 900) {
@@ -252,14 +242,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // Logo
                   Container(
-                    width: 140,
-                    height: 140,
+                    width: 160,
+                    height: 160,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(30),
+                      borderRadius: BorderRadius.circular(12),
                       child: Image.asset(
                         'assets/images/logo.jpeg',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 70, color: Colors.white),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 80, color: Colors.white),
                       ),
                     ),
                   ),

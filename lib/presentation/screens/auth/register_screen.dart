@@ -96,17 +96,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.yaviracBlue.withOpacity(0.8),
-                AppColors.yaviracBlueDark.withOpacity(0.6),
-                AppColors.yaviracBlue.withOpacity(0.8),
-              ],
-            ),
-          ),
+          // Sin overlay azul, solo la imagen de fondo
           child: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -198,26 +188,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _buildLogo() {
     return FadeInDown(
       child: Container(
-        width: 140,
-        height: 140,
+        width: 160,
+        height: 160,
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: AppColors.yaviracOrange.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.yaviracOrange.withOpacity(0.2),
-              blurRadius: 30,
-              spreadRadius: 5,
-            ),
-          ],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(12),
           child: Image.asset(
-            'assets/images/yavirac.png',
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 70, color: Colors.white),
+            'assets/images/logo.jpeg',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Icon(Icons.school, size: 80, color: Colors.white),
           ),
         ),
       ),
@@ -226,73 +210,75 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Widget _buildMissionVision() {
     return FadeInLeft(
-      child: Container(
+      child: GlassmorphicContainer(
         width: 600,
-        padding: const EdgeInsets.all(40),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withOpacity(0.1),
-              Colors.white.withOpacity(0.05),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.yaviracOrange.withOpacity(0.5),
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.yaviracOrange.withOpacity(0.2),
-              blurRadius: 20,
-              spreadRadius: 5,
-            ),
+        height: 350,
+        borderRadius: 20,
+        blur: 20,
+        alignment: Alignment.center,
+        border: 2,
+        linearGradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.1),
+            Colors.white.withOpacity(0.05),
           ],
         ),
-        child: Column(
-          children: [
-            Text(
-              'NUESTRA MISIÓN',
-              style: OptimizedTheme.heading3.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.yaviracOrange,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Formar profesionales de excelencia enfocados en Ciencia, Tecnología y Sociedad.',
-              textAlign: TextAlign.center,
-              style: OptimizedTheme.bodyText.copyWith(
-                fontSize: 15,
-                color: Colors.white.withOpacity(0.9),
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'NUESTRA VISIÓN',
-              style: OptimizedTheme.heading3.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.yaviracBlueDark,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Al 2027 el Instituto Superior Tecnológico de Turismo y Patrimonio Yavirac será una institución de vanguardia en la formación tecnológica y conservación del patrimonio.',
-              textAlign: TextAlign.center,
-              style: OptimizedTheme.bodyText.copyWith(
-                fontSize: 15,
-                color: Colors.white.withOpacity(0.9),
-                height: 1.5,
-              ),
-            ),
+        borderGradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            GlassTheme.neonCyan.withOpacity(0.5),
+            GlassTheme.neonPurple.withOpacity(0.5),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'NUESTRA MISIÓN',
+                style: OptimizedTheme.heading3.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: GlassTheme.neonCyan,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Formar profesionales de excelencia enfocados en Ciencia, Tecnología y Sociedad.',
+                textAlign: TextAlign.center,
+                style: OptimizedTheme.bodyText.copyWith(
+                  fontSize: 15,
+                  color: Colors.white.withOpacity(0.9),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'NUESTRA VISIÓN',
+                style: OptimizedTheme.heading3.copyWith(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: GlassTheme.neonPurple,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Al 2027 el Instituto Superior Tecnológico de Turismo y Patrimonio Yavirac será una institución de vanguardia en la formación tecnológica y conservación del patrimonio.',
+                textAlign: TextAlign.center,
+                style: OptimizedTheme.bodyText.copyWith(
+                  fontSize: 15,
+                  color: Colors.white.withOpacity(0.9),
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
