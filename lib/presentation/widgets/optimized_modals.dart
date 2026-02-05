@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/optimized_theme.dart';
 
@@ -262,6 +264,10 @@ class _AddBookFormState extends State<_AddBookForm> {
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
   bool _loadingCategories = true;
+  bool _useFileUpload = false;
+  Uint8List? _selectedFile;
+  String? _selectedFileName;
+  bool _uploadingFile = false;
 
   @override
   void initState() {
@@ -318,7 +324,7 @@ class _AddBookFormState extends State<_AddBookForm> {
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
               const SizedBox(height: 16),
-              _buildInput(_fileUrlController, 'URL del archivo (PDF/EPUB)', Icons.link),
+              _buildFileUploadSection(),
               const SizedBox(height: 16),
               _buildInput(_coverUrlController, 'URL de la portada', Icons.image),
               const SizedBox(height: 16),
@@ -459,9 +465,23 @@ class _AddBookFormState extends State<_AddBookForm> {
   }
 
   Future<void> _submitBook() async {
-    if (_titleController.text.isEmpty || _authorController.text.isEmpty || _fileUrlController.text.isEmpty) {
+    if (_titleController.text.isEmpty || _authorController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa título, autor y URL del archivo')),
+        const SnackBar(content: Text('Completa título y autor')),
+      );
+      return;
+    }
+
+    if (!_useFileUpload && _fileUrlController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa URL del archivo')),
+      );
+      return;
+    }
+
+    if (_useFileUpload && _selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selecciona un archivo')),
       );
       return;
     }
@@ -469,11 +489,23 @@ class _AddBookFormState extends State<_AddBookForm> {
     setState(() => _isLoading = true);
 
     try {
+      String? fileUrl;
+      
+      if (_useFileUpload) {
+        fileUrl = await _uploadFile();
+        if (fileUrl == null) {
+          setState(() => _isLoading = false);
+          return;
+        }
+      } else {
+        fileUrl = _fileUrlController.text;
+      }
+
       await Supabase.instance.client.from('books').insert({
         'title': _titleController.text,
         'author': _authorController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        'file_url': _fileUrlController.text,
+        'file_url': fileUrl,
         'cover_url': _coverUrlController.text.isEmpty ? null : _coverUrlController.text,
         'isbn': _isbnController.text.isEmpty ? null : _isbnController.text,
         'year': _yearController.text.isEmpty ? null : int.tryParse(_yearController.text),
@@ -497,6 +529,173 @@ class _AddBookFormState extends State<_AddBookForm> {
     }
 
     setState(() => _isLoading = false);
+  }
+
+  Widget _buildFileUploadSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: RadioListTile<bool>(
+                title: Text('URL del archivo', style: OptimizedTheme.bodyTextSmall),
+                value: false,
+                groupValue: _useFileUpload,
+                onChanged: (value) => setState(() {
+                  _useFileUpload = value!;
+                  _selectedFile = null;
+                  _selectedFileName = null;
+                }),
+                activeColor: AppColors.yaviracOrange,
+              ),
+            ),
+            Expanded(
+              child: RadioListTile<bool>(
+                title: Text('Subir archivo', style: OptimizedTheme.bodyTextSmall),
+                value: true,
+                groupValue: _useFileUpload,
+                onChanged: (value) => setState(() {
+                  _useFileUpload = value!;
+                  _fileUrlController.clear();
+                }),
+                activeColor: AppColors.yaviracOrange,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (!_useFileUpload)
+          _buildInput(_fileUrlController, 'URL del archivo (PDF/EPUB)', Icons.link)
+        else
+          _buildFilePickerSection(),
+      ],
+    );
+  }
+
+  Widget _buildFilePickerSection() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _selectedFile != null ? AppColors.yaviracOrange : Colors.white.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        children: [
+          if (_selectedFile == null) ...[
+            Icon(Icons.cloud_upload, size: 48, color: AppColors.yaviracOrange),
+            const SizedBox(height: 16),
+            Text(
+              'Seleccionar archivo PDF o EPUB',
+              style: OptimizedTheme.bodyText,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _pickFile,
+              icon: const Icon(Icons.file_upload),
+              label: const Text('Seleccionar Archivo'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.yaviracOrange,
+              ),
+            ),
+          ] else ...[
+            Icon(Icons.check_circle, size: 48, color: Colors.green),
+            const SizedBox(height: 16),
+            Text(
+              'Archivo seleccionado:',
+              style: OptimizedTheme.bodyTextSmall,
+            ),
+            Text(
+              _selectedFileName ?? 'archivo.pdf',
+              style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _pickFile,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Cambiar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.yaviracOrange,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: () => setState(() {
+                    _selectedFile = null;
+                    _selectedFileName = null;
+                  }),
+                  icon: const Icon(Icons.delete),
+                  label: const Text('Quitar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'epub'],
+        withData: true,
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        setState(() {
+          _selectedFile = result.files.single.bytes!;
+          _selectedFileName = result.files.single.name;
+          if (_selectedFileName!.toLowerCase().endsWith('.epub')) {
+            _selectedFormat = 'epub';
+          } else {
+            _selectedFormat = 'pdf';
+          }
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al seleccionar archivo: $e')),
+      );
+    }
+  }
+
+  Future<String?> _uploadFile() async {
+    if (_selectedFile == null || _selectedFileName == null) return null;
+
+    setState(() => _uploadingFile = true);
+
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName';
+      
+      await Supabase.instance.client.storage
+          .from('books')
+          .uploadBinary(fileName, _selectedFile!);
+
+      final publicUrl = Supabase.instance.client.storage
+          .from('books')
+          .getPublicUrl(fileName);
+
+      return publicUrl;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al subir archivo: $e')),
+      );
+      return null;
+    } finally {
+      setState(() => _uploadingFile = false);
+    }
   }
 }
 
