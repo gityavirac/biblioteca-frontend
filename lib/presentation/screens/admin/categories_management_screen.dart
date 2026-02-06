@@ -74,6 +74,30 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
     }
   }
 
+  Future<void> _updateCategory(String id) async {
+    if (_nameController.text.trim().isEmpty) return;
+
+    try {
+      await Supabase.instance.client.from('categories').update({
+        'name': _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+      }).eq('id', id);
+
+      _nameController.clear();
+      _descriptionController.clear();
+      Navigator.pop(context);
+      _loadCategories();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Categoría actualizada exitosamente')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
   Future<void> _deleteCategory(String id) async {
     try {
       await Supabase.instance.client
@@ -90,6 +114,68 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
         SnackBar(content: Text('Error: $e')),
       );
     }
+  }
+
+  void _showEditDialog(Map<String, dynamic> category) {
+    _nameController.text = category['name'];
+    _descriptionController.text = category['description'] ?? '';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text('Editar Categoría', style: OptimizedTheme.heading3),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _nameController,
+                style: OptimizedTheme.bodyText,
+                decoration: InputDecoration(
+                  labelText: 'Nombre de la categoría',
+                  labelStyle: OptimizedTheme.bodyTextSmall,
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.yaviracOrange),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _descriptionController,
+                style: OptimizedTheme.bodyText,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Descripción (opcional)',
+                  labelStyle: OptimizedTheme.bodyTextSmall,
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: AppColors.yaviracOrange),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar', style: OptimizedTheme.bodyTextSmall),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.yaviracOrange),
+            onPressed: () => _updateCategory(category['id']),
+            child: Text('Actualizar', style: OptimizedTheme.bodyText),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showCreateDialog() {
@@ -242,9 +328,18 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
                                         overflow: TextOverflow.ellipsis,
                                       )
                                     : null,
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _showDeleteDialog(category),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blue),
+                                      onPressed: () => _showEditDialog(category),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () => _showDeleteDialog(category),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

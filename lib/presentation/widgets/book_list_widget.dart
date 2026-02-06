@@ -130,7 +130,8 @@ class BookListWidget extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (canEdit && (userRole == 'bibliotecario' || userRole == 'admin'))
+                if (canEdit && (userRole == 'bibliotecario' || userRole == 'admin' || 
+                    (userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
                   Positioned(
                     top: 4,
                     right: 4,
@@ -155,7 +156,7 @@ class BookListWidget extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (userRole == 'admin')
+                        if (userRole == 'admin' || (userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))
                           const PopupMenuItem(
                             value: 'delete',
                             child: Row(
@@ -180,7 +181,7 @@ class BookListWidget extends StatelessWidget {
   void _handleMenuAction(String action, Map<String, dynamic> book, BuildContext context) {
     if (action == 'edit') {
       _showEditDialog(context, book);
-    } else if (action == 'delete' && userRole == 'admin') {
+    } else if (action == 'delete' && (userRole == 'admin' || (userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
       _showDeleteDialog(context, book);
     }
   }

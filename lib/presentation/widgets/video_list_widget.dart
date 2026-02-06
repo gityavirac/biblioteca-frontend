@@ -150,7 +150,8 @@ class VideoListWidget extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (canEdit && (userRole == 'bibliotecario' || userRole == 'admin'))
+                if (canEdit && (userRole == 'bibliotecario' || userRole == 'admin' || 
+                    (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
                   Positioned(
                     top: 4,
                     right: 4,
@@ -175,7 +176,7 @@ class VideoListWidget extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (userRole == 'admin')
+                        if (userRole == 'admin' || (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
                           const PopupMenuItem(
                             value: 'delete',
                             child: Row(
@@ -198,10 +199,18 @@ class VideoListWidget extends StatelessWidget {
   }
 
   void _handleMenuAction(String action, Map<String, dynamic> video, BuildContext context) {
+    print('🎬 DEBUG: Action: $action, UserRole: $userRole');
+    print('🎬 DEBUG: Video created_by: ${video['created_by']}');
+    print('🎬 DEBUG: Current user: ${Supabase.instance.client.auth.currentUser?.id}');
+    
     if (action == 'edit') {
+      print('🎬 DEBUG: Calling _showEditDialog');
       _showEditDialog(context, video);
-    } else if (action == 'delete' && userRole == 'admin') {
+    } else if (action == 'delete' && (userRole == 'admin' || (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
+      print('🎬 DEBUG: Calling _showDeleteDialog');
       _showDeleteDialog(context, video);
+    } else {
+      print('🎬 DEBUG: Delete condition failed');
     }
   }
 
@@ -334,6 +343,7 @@ class VideoListWidget extends StatelessWidget {
   }
 
   void _showDeleteDialog(BuildContext context, Map<String, dynamic> video) {
+    print('🎬 DEBUG: Showing delete dialog for video: ${video['title']}');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -342,22 +352,36 @@ class VideoListWidget extends StatelessWidget {
         content: Text('¿Seguro que quieres eliminar este video?', style: GoogleFonts.outfit(color: Colors.white70)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              print('🎬 DEBUG: Cancel button pressed');
+              Navigator.pop(context);
+            },
             child: Text('Cancelar', style: GoogleFonts.outfit(color: Colors.white70)),
           ),
           TextButton(
             onPressed: () async {
+              print('🎬 DEBUG: Delete button pressed');
               Navigator.pop(context);
               try {
-                await Supabase.instance.client.from('videos').delete().eq('id', video['id']);
+                print('🎬 DEBUG: Attempting to delete video with ID: ${video['id']}');
+                final result = await Supabase.instance.client.from('videos').delete().eq('id', video['id']);
+                print('🎬 DEBUG: Delete result: $result');
+                print('🎬 DEBUG: Video deleted successfully');
+                print('🎬 DEBUG: Calling onRefresh()');
                 onRefresh();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Video eliminado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
-                );
+                print('🎬 DEBUG: onRefresh() called');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Video eliminado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
+                  );
+                }
               } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error al eliminar: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
-                );
+                print('🎬 DEBUG: Error deleting video: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al eliminar: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                  );
+                }
               }
             },
             child: Text('Eliminar', style: GoogleFonts.outfit(color: Colors.red)),
