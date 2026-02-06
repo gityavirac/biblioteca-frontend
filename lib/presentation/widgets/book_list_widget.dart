@@ -195,6 +195,7 @@ class BookListWidget extends StatelessWidget {
     final isbnController = TextEditingController(text: book['isbn'] ?? '');
     final yearController = TextEditingController(text: book['year']?.toString() ?? '');
     final locationController = TextEditingController(text: book['physical_location'] ?? '');
+    final codigoFisicoController = TextEditingController(text: book['codigo_fisico'] ?? '');
     
     String selectedFormat = book['format'] ?? 'pdf';
     String selectedCategory = book['category'] ?? 'General';
@@ -353,6 +354,18 @@ class BookListWidget extends StatelessWidget {
                         ),
                         if (isPhysical)
                           TextField(
+                            controller: codigoFisicoController,
+                            style: GoogleFonts.outfit(color: Colors.white),
+                            decoration: InputDecoration(
+                              labelText: 'Código Físico',
+                              labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                              focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                            ),
+                          ),
+                        if (isPhysical) const SizedBox(height: 16),
+                        if (isPhysical)
+                          TextField(
                             controller: locationController,
                             style: GoogleFonts.outfit(color: Colors.white),
                             decoration: InputDecoration(
@@ -389,6 +402,7 @@ class BookListWidget extends StatelessWidget {
                     'category': selectedCategory,
                     'is_physical': isPhysical,
                     'physical_location': isPhysical ? locationController.text : null,
+                    'codigo_fisico': isPhysical ? codigoFisicoController.text : null,
                   }).eq('id', book['id']);
                   
                   Navigator.pop(context);

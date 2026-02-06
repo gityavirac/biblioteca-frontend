@@ -71,7 +71,7 @@ class OptimizedModals {
     );
   }
 
-  // Modal para agregar libro
+  // Modal para agregar libro digital
   static void showAddBookModal(BuildContext context, {Function()? onSuccess}) {
     showDialog(
       context: context,
@@ -86,7 +86,28 @@ class OptimizedModals {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: AppColors.yaviracOrange.withOpacity(0.3)),
           ),
-          child: _AddBookForm(onSuccess: onSuccess),
+          child: _AddBookForm(onSuccess: onSuccess, isPhysicalOnly: false),
+        ),
+      ),
+    );
+  }
+
+  // Modal para agregar libro físico
+  static void showAddPhysicalBookModal(BuildContext context, {Function()? onSuccess}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.9,
+          decoration: BoxDecoration(
+            color: AppColors.yaviracBlueDark,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.yaviracOrange.withOpacity(0.3)),
+          ),
+          child: _AddBookForm(onSuccess: onSuccess, isPhysicalOnly: true),
         ),
       ),
     );
@@ -243,8 +264,9 @@ class _PdfViewer extends StatelessWidget {
 // Formulario optimizado para agregar libros
 class _AddBookForm extends StatefulWidget {
   final Function()? onSuccess;
+  final bool isPhysicalOnly;
 
-  const _AddBookForm({this.onSuccess});
+  const _AddBookForm({this.onSuccess, this.isPhysicalOnly = false});
 
   @override
   State<_AddBookForm> createState() => _AddBookFormState();
@@ -261,6 +283,7 @@ class _AddBookFormState extends State<_AddBookForm> {
   
   String _selectedFormat = 'pdf';
   String? _selectedCategory;
+  String? _selectedSubcategory;
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = false;
   bool _loadingCategories = true;
@@ -269,7 +292,9 @@ class _AddBookFormState extends State<_AddBookForm> {
   String? _selectedFileName;
   bool _uploadingFile = false;
   bool _isPhysical = false;
+  PlatformFile? _selectedCover;
   final _locationController = TextEditingController();
+  final _codigoFisicoController = TextEditingController();
 
   @override
   void initState() {
@@ -281,13 +306,15 @@ class _AddBookFormState extends State<_AddBookForm> {
     try {
       final response = await Supabase.instance.client
           .from('categories')
-          .select()
+          .select('name')
           .eq('is_active', true)
           .order('name');
       
       setState(() {
         _categories = List<Map<String, dynamic>>.from(response);
-        _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first['name'];
+        }
         _loadingCategories = false;
       });
     } catch (e) {
@@ -303,7 +330,7 @@ class _AddBookFormState extends State<_AddBookForm> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          'Agregar Libro',
+          widget.isPhysicalOnly ? 'Agregar Libro Físico' : 'Agregar Libro',
           style: OptimizedTheme.heading2,
         ),
         leading: IconButton(
@@ -326,9 +353,10 @@ class _AddBookFormState extends State<_AddBookForm> {
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
               const SizedBox(height: 16),
-              _buildFileUploadSection(),
-              const SizedBox(height: 16),
-              _buildInput(_coverUrlController, 'URL de la portada (opcional)', Icons.image),
+              // Solo mostrar sección de archivos si NO es libro físico
+              if (!widget.isPhysicalOnly) _buildFileUploadSection(),
+              if (!widget.isPhysicalOnly) const SizedBox(height: 16),
+              _buildCoverSection(),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -342,7 +370,11 @@ class _AddBookFormState extends State<_AddBookForm> {
               const SizedBox(height: 16),
               _buildPhysicalBookSection(),
               const SizedBox(height: 16),
-              _buildCategoryDropdown(),
+              Row(
+                children: [
+                  Expanded(child: _buildCategoryDropdown()),
+                ],
+              ),
               const SizedBox(height: 32),
               _buildSubmitButton(),
             ],
@@ -476,14 +508,14 @@ class _AddBookFormState extends State<_AddBookForm> {
       return;
     }
 
-    if (!_useFileUpload && _fileUrlController.text.isEmpty) {
+    if (!widget.isPhysicalOnly && !_useFileUpload && _fileUrlController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingresa URL del archivo')),
       );
       return;
     }
 
-    if (_useFileUpload && _selectedFile == null) {
+    if (!widget.isPhysicalOnly && _useFileUpload && _selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona un archivo')),
       );
@@ -494,31 +526,57 @@ class _AddBookFormState extends State<_AddBookForm> {
 
     try {
       String? fileUrl;
+      String? coverUrl;
       
-      if (_useFileUpload) {
-        fileUrl = await _uploadFile();
-        if (fileUrl == null) {
-          setState(() => _isLoading = false);
-          return;
+      // Subir portada si es local
+      if (_selectedCover != null) {
+        try {
+          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
+          
+          if (_selectedCover!.bytes != null) {
+            await Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .uploadBinary(coverName, _selectedCover!.bytes!);
+            
+            coverUrl = Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .getPublicUrl(coverName);
+          }
+        } catch (storageError) {
+          print('Error subiendo portada: $storageError');
         }
-      } else {
-        fileUrl = _fileUrlController.text;
+      } else if (_coverUrlController.text.isNotEmpty) {
+        coverUrl = _coverUrlController.text;
+      }
+      
+      if (!widget.isPhysicalOnly) {
+        if (_useFileUpload) {
+          fileUrl = await _uploadFile();
+          if (fileUrl == null) {
+            setState(() => _isLoading = false);
+            return;
+          }
+        } else {
+          fileUrl = _fileUrlController.text;
+        }
       }
 
       await Supabase.instance.client.from('books').insert({
         'title': _titleController.text,
         'author': _authorController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
-        'file_url': fileUrl,
-        'cover_url': _coverUrlController.text.isEmpty ? null : _coverUrlController.text,
+        'file_url': (widget.isPhysicalOnly || _isPhysical) ? null : fileUrl,
+        'cover_url': coverUrl,
         'isbn': _isbnController.text.isEmpty ? null : _isbnController.text,
         'year': _yearController.text.isEmpty ? null : int.tryParse(_yearController.text),
-        'format': _selectedFormat,
+        'format': (widget.isPhysicalOnly || _isPhysical) ? 'pdf' : _selectedFormat,
         'category': _selectedCategory,
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
-        'is_physical': _isPhysical,
-        'physical_location': _isPhysical ? _locationController.text : null,
+        'is_physical': widget.isPhysicalOnly || _isPhysical,
+        'is_physical_only': widget.isPhysicalOnly,
+        'physical_location': (widget.isPhysicalOnly || _isPhysical) ? _locationController.text : null,
+        'codigo_fisico': (widget.isPhysicalOnly || _isPhysical) ? _codigoFisicoController.text : null,
       });
 
       if (mounted) {
@@ -686,11 +744,11 @@ class _AddBookFormState extends State<_AddBookForm> {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName';
       
       await Supabase.instance.client.storage
-          .from('books')
+          .from('Libros_digitales')
           .uploadBinary(fileName, _selectedFile!);
 
       final publicUrl = Supabase.instance.client.storage
-          .from('books')
+          .from('Libros_digitales')
           .getPublicUrl(fileName);
 
       return publicUrl;
@@ -701,6 +759,90 @@ class _AddBookFormState extends State<_AddBookForm> {
       return null;
     } finally {
       setState(() => _uploadingFile = false);
+    }
+  }
+
+  Widget _buildCoverSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Portada del libro',
+          style: OptimizedTheme.bodyText.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: RadioListTile<bool>(
+                title: Text('URL de portada', style: OptimizedTheme.bodyTextSmall),
+                value: false,
+                groupValue: _selectedCover != null,
+                onChanged: (value) => setState(() {
+                  _selectedCover = null;
+                }),
+                activeColor: AppColors.yaviracOrange,
+              ),
+            ),
+            Expanded(
+              child: RadioListTile<bool>(
+                title: Text('Subir imagen', style: OptimizedTheme.bodyTextSmall),
+                value: true,
+                groupValue: _selectedCover != null,
+                onChanged: (value) => _pickCoverImage(),
+                activeColor: AppColors.yaviracOrange,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_selectedCover == null)
+          _buildInput(_coverUrlController, 'URL de la portada (opcional)', Icons.image)
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.yaviracOrange),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Imagen seleccionada: ${_selectedCover?.name ?? "imagen.jpg"}',
+                    style: OptimizedTheme.bodyTextSmall,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => setState(() => _selectedCover = null),
+                  child: Text('Quitar', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickCoverImage() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        setState(() {
+          _selectedCover = result.files.single;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al seleccionar imagen: $e')),
+      );
     }
   }
 
@@ -731,6 +873,8 @@ class _AddBookFormState extends State<_AddBookForm> {
             controlAffinity: ListTileControlAffinity.leading,
           ),
           if (_isPhysical) ...[
+            const SizedBox(height: 16),
+            _buildInput(_codigoFisicoController, 'Código Físico', Icons.qr_code_2),
             const SizedBox(height: 16),
             _buildInput(_locationController, 'Ubicación en biblioteca', Icons.location_on),
           ],

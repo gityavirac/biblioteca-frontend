@@ -20,6 +20,7 @@ import 'tabs/library_tab.dart';
 import 'tabs/videos_tab.dart';
 import '../admin/add_book_screen.dart';
 import '../admin/add_video_screen.dart';
+import '../admin/add_physical_book_screen.dart';
 import '../admin/categories_management_screen.dart';
 import 'users_management_screen.dart';
 import 'book_detail_screen.dart';
@@ -51,7 +52,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
     _loadUserDataAsync();
     OptimizedCacheService.instance.init();
   }
@@ -151,6 +152,8 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         return const _RequestsTab();
       case 9:
         return const _CategoriesManagementTab();
+      case 10:
+        return _PhysicalBooksTab(canEdit: _canEdit, userRole: _userRole);
       default:
         return HomeTab(searchQuery: _searchQuery);
     }
@@ -384,6 +387,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         children: [
           _buildMenuItem(Icons.home, 'Inicio', 0),
           _buildMenuItem(Icons.library_books, 'Libros', 1),
+          _buildMenuItem(Icons.location_on, 'Libros Físicos', 10),
           _buildMenuItem(Icons.video_library, 'Videos', 2),
           _buildMenuItem(Icons.favorite, 'Favoritos', 3),
           _buildMenuItem(Icons.person, 'Perfil', 4),
@@ -1999,7 +2003,7 @@ class _AddContentTab extends StatelessWidget {
                     context,
                     onSuccess: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Libro agregado exitosamente')),
+                        const SnackBar(content: Text('Libro digital agregado exitosamente')),
                       );
                     },
                   ),
@@ -2014,10 +2018,10 @@ class _AddContentTab extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.library_books, size: 64, color: Colors.white),
+                        const Icon(Icons.cloud_upload, size: 64, color: Colors.white),
                         const SizedBox(height: 16),
                         Text(
-                          'Agregar Libros',
+                          'Libro Digital',
                           style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -2025,7 +2029,40 @@ class _AddContentTab extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => OptimizedModals.showAddPhysicalBookModal(
+                    context,
+                    onSuccess: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Libro físico agregado exitosamente')),
+                      );
+                    },
+                  ),
+                  child: Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.location_on, size: 64, color: Colors.white),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Libro Físico',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: GestureDetector(
                   onTap: () => OptimizedModals.showAddVideoModal(
@@ -2363,6 +2400,182 @@ class _RequestItem extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PhysicalBooksTab extends StatelessWidget {
+  final bool canEdit;
+  final String userRole;
+  
+  const _PhysicalBooksTab({required this.canEdit, required this.userRole});
+
+  Future<List<Map<String, dynamic>>> _loadPhysicalBooks() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('books')
+          .select()
+          .eq('is_physical_only', true)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error loading physical books: $e');
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Libros Físicos Disponibles',
+            style: OptimizedTheme.heading2,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadPhysicalBooks(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                }
+                
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.location_on, size: 80, color: Colors.white24),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hay libros físicos registrados',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    childAspectRatio: 0.75,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: snapshot.data!.length,
+                  itemBuilder: (context, index) {
+                    final book = snapshot.data![index];
+                    return GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookDetailScreen(book: book),
+                        ),
+                      ),
+                      child: GlassmorphicContainer(
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: 8,
+                        blur: 8,
+                        alignment: Alignment.center,
+                        border: 0,
+                        linearGradient: LinearGradient(
+                          colors: [
+                            Colors.green.withOpacity(0.15),
+                            Colors.green.withOpacity(0.08),
+                          ],
+                        ),
+                        borderGradient: LinearGradient(
+                          colors: [
+                            Colors.green.withOpacity(0.3),
+                            Colors.white.withOpacity(0.1),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: Container(
+                                margin: const EdgeInsets.all(6),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: book['cover_url'] != null
+                                      ? Image.network(
+                                          book['cover_url'],
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: Colors.green.withOpacity(0.2),
+                                            child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: Colors.green.withOpacity(0.2),
+                                          child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      book['title'] ?? 'Sin título',
+                                      style: OptimizedTheme.caption.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    Text(
+                                      book['author'] ?? 'Autor desconocido',
+                                      style: OptimizedTheme.caption.copyWith(
+                                        fontSize: 8,
+                                        color: Colors.white70,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.3),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'FÍSICO',
+                                        style: OptimizedTheme.caption.copyWith(
+                                          fontSize: 6,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

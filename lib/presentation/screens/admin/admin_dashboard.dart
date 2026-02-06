@@ -9,6 +9,7 @@ import '../../../data/models/support_request_model.dart';
 import '../../theme/glass_theme.dart';
 import '../auth/login_screen.dart';
 import 'add_book_screen.dart';
+import 'add_physical_book_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   final SupabaseAuthService authService;
@@ -266,24 +267,46 @@ class _BooksTabState extends State<_BooksTab> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Gestión de Libros', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GlassTheme.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const AddBookScreen()),
-                  );
-                  if (result == true) {
-                    // Refresh books list
-                    if (mounted) setState(() {});
-                  }
-                },
-                icon: const Icon(Icons.add),
-                label: Text('Agregar Libro', style: GoogleFonts.outfit()),
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: GlassTheme.primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AddBookScreen()),
+                      );
+                      if (result == true) {
+                        if (mounted) setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.cloud_upload),
+                    label: Text('Libro Digital', style: GoogleFonts.outfit()),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AddPhysicalBookScreen()),
+                      );
+                      if (result == true) {
+                        if (mounted) setState(() {});
+                      }
+                    },
+                    icon: const Icon(Icons.location_on),
+                    label: Text('Libro Físico', style: GoogleFonts.outfit()),
+                  ),
+                ],
               ),
             ],
           ),

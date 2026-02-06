@@ -24,6 +24,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
   final _coverUrlController = TextEditingController();
   final _isbnController = TextEditingController();
   final _yearController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _codigoFisicoController = TextEditingController();
   
   PlatformFile? _selectedFile;
   PlatformFile? _selectedCover;
@@ -32,6 +34,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   String _selectedCategory = 'Desarrollo de Software';
   String _selectedSubcategory = 'Frontend';
   bool _isLoading = false;
+  bool _isPhysical = false;
 
   final Map<String, List<String>> _categories = {
     'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
@@ -69,6 +72,15 @@ class _AddBookScreenState extends State<AddBookScreen> {
   }
 
   Future<void> _addBook() async {
+    // DEBUG visible en pantalla
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🚀 INICIO _addBook', style: GoogleFonts.outfit()),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    
     if (_titleController.text.isEmpty || _authorController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Completa título y autor')),
@@ -76,52 +88,144 @@ class _AddBookScreenState extends State<AddBookScreen> {
       return;
     }
 
-    if (_fileUrlController.text.isEmpty && _selectedFile == null) {
+    // Si es categoría "Libros Físicos", no requiere archivo
+    bool isPhysicalOnly = _selectedCategory == 'Libros Físicos';
+    
+    if (!isPhysicalOnly && _fileUrlController.text.isEmpty && _selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Agrega URL o selecciona archivo')),
+        const SnackBar(content: Text('Agrega URL del archivo')),
+      );
+      return;
+    }
+    
+    if (isPhysicalOnly && !_isPhysical) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Los libros físicos deben tener ubicación')),
       );
       return;
     }
 
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ Validaciones OK, iniciando...', style: GoogleFonts.outfit()),
+        backgroundColor: Colors.blue,
+        duration: Duration(seconds: 2),
+      ),
+    );
     setState(() => _isLoading = true);
 
     try {
+      print('🔍 Entrando al try block');
+      
+      // Mostrar debug en pantalla
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('DEBUG: Iniciando proceso de subida...', style: GoogleFonts.outfit()),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      // DEBUG: Verificar configuración de Supabase
+      print('🔍 DEBUG: Usuario autenticado: ${Supabase.instance.client.auth.currentUser?.id}');
+      print('🔍 DEBUG: Usuario email: ${Supabase.instance.client.auth.currentUser?.email}');
+      
+      // Verificar que el bucket existe
+      try {
+        final buckets = await Supabase.instance.client.storage.listBuckets();
+        final bucketNames = buckets.map((b) => b.name).toList();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Buckets disponibles: $bucketNames', style: GoogleFonts.outfit()),
+              backgroundColor: Colors.blue,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error listando buckets: $e', style: GoogleFonts.outfit()),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+      
       String? fileUrl;
       String? coverUrl;
+      bool isPhysicalOnly = _selectedCategory == 'Libros Físicos';
 
-      // Subir archivo si es local
-      if (_selectedFile != null) {
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_titleController.text.replaceAll(' ', '_')}.$_selectedFormat';
-        
-        if (_selectedFile!.bytes != null) {
-          await Supabase.instance.client.storage
-              .from('books')
-              .uploadBinary(fileName, _selectedFile!.bytes!);
+      // Solo subir archivo si NO es libro físico exclusivo
+      if (!isPhysicalOnly && _selectedFile != null) {
+        try {
+          final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_titleController.text.replaceAll(' ', '_')}.$_selectedFormat';
           
-          fileUrl = Supabase.instance.client.storage
-              .from('books')
-              .getPublicUrl(fileName);
+          print('🔍 DEBUG: Intentando subir archivo...');
+          print('🔍 DEBUG: Bucket name: Libros_digitales');
+          print('🔍 DEBUG: File name: $fileName');
+          print('🔍 DEBUG: File size: ${_selectedFile!.bytes?.length} bytes');
+          
+          if (_selectedFile!.bytes != null) {
+            print('🔍 DEBUG: Iniciando upload...');
+            await Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .uploadBinary(fileName, _selectedFile!.bytes!);
+            
+            print('🔍 DEBUG: Upload exitoso, obteniendo URL...');
+            fileUrl = Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .getPublicUrl(fileName);
+            print('🔍 DEBUG: URL obtenida: $fileUrl');
+          }
+        } catch (storageError) {
+          print('❌ ERROR STORAGE: $storageError');
+          print('❌ ERROR TYPE: ${storageError.runtimeType}');
+          // Si falla el storage, mostrar mensaje y usar URL manual
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('DEBUG: $storageError\nTipo: ${storageError.runtimeType}', style: GoogleFonts.outfit()),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 10),
+              ),
+            );
+          }
+          setState(() => _isLoading = false);
+          return;
         }
-      } else {
+      } else if (!isPhysicalOnly) {
         fileUrl = _fileUrlController.text;
       }
+      // Si es libro físico exclusivo, fileUrl queda null
 
-      // Subir portada si es local
-      if (_selectedCover != null) {
-        final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
-        
-        if (_selectedCover!.bytes != null) {
-          await Supabase.instance.client.storage
-              .from('covers')
-              .uploadBinary(coverName, _selectedCover!.bytes!);
+      // Solo subir portada si NO es libro físico exclusivo
+      if (!isPhysicalOnly && _selectedCover != null) {
+        try {
+          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
           
-          coverUrl = Supabase.instance.client.storage
-              .from('covers')
-              .getPublicUrl(coverName);
+          if (_selectedCover!.bytes != null) {
+            await Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .uploadBinary(coverName, _selectedCover!.bytes!);
+            
+            coverUrl = Supabase.instance.client.storage
+                .from('Libros_digitales')
+                .getPublicUrl(coverName);
+          }
+        } catch (storageError) {
+          // Si falla el storage de portadas, continuar sin portada
+          print('Error subiendo portada: $storageError');
         }
-      } else if (_coverUrlController.text.isNotEmpty && !_coverUrlController.text.contains('seleccionada')) {
+      } else if (!isPhysicalOnly && _coverUrlController.text.isNotEmpty && !_coverUrlController.text.contains('seleccionada')) {
         coverUrl = _coverUrlController.text;
       }
+      // Si es libro físico exclusivo, coverUrl queda null
 
       await Supabase.instance.client.from('books').insert({
         'title': _titleController.text,
@@ -137,6 +241,9 @@ class _AddBookScreenState extends State<AddBookScreen> {
         'categories': [_selectedCategory],
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
+        'is_physical': _isPhysical || (_selectedCategory == 'Libros Físicos'),
+        'physical_location': (_isPhysical || (_selectedCategory == 'Libros Físicos')) ? _locationController.text : null,
+        'codigo_fisico': (_isPhysical || (_selectedCategory == 'Libros Físicos')) ? _codigoFisicoController.text : null,
       });
 
       if (mounted) {
@@ -290,10 +397,13 @@ class _AddBookScreenState extends State<AddBookScreen> {
             const SizedBox(height: 20),
             _buildBasicInfo(),
             const SizedBox(height: 30),
-            _buildSectionTitle('Archivos', Icons.cloud_upload),
-            const SizedBox(height: 20),
-            _buildFileSection(),
-            const SizedBox(height: 30),
+            // Solo mostrar sección de archivos si NO es "Libros Físicos"
+            if (_selectedCategory != 'Libros Físicos') ...[
+              _buildSectionTitle('Archivos', Icons.cloud_upload),
+              const SizedBox(height: 20),
+              _buildFileSection(),
+              const SizedBox(height: 30),
+            ],
             _buildSectionTitle('Detalles', Icons.tune),
             const SizedBox(height: 20),
             _buildDetailsSection(),
@@ -301,6 +411,10 @@ class _AddBookScreenState extends State<AddBookScreen> {
             _buildSectionTitle('Categorización', Icons.category),
             const SizedBox(height: 20),
             _buildCategorySection(),
+            const SizedBox(height: 30),
+            _buildSectionTitle('Libro Físico', Icons.location_on),
+            const SizedBox(height: 20),
+            _buildPhysicalSection(),
             const SizedBox(height: 40),
             _buildSubmitButton(),
           ],
@@ -459,6 +573,10 @@ class _AddBookScreenState extends State<AddBookScreen> {
             (value) => setState(() {
               _selectedCategory = value!;
               _selectedSubcategory = _categories[value]!.first;
+              // Si selecciona "Libros Físicos", activar automáticamente _isPhysical
+              if (value == 'Libros Físicos') {
+                _isPhysical = true;
+              }
             }),
           ),
         ),
@@ -472,6 +590,74 @@ class _AddBookScreenState extends State<AddBookScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPhysicalSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.yaviracOrange.withOpacity(0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Checkbox(
+                value: _isPhysical,
+                onChanged: (value) => setState(() => _isPhysical = value ?? false),
+                activeColor: AppColors.yaviracOrange,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '¿Es un libro físico?',
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (_isPhysical) ...[
+            const SizedBox(height: 16),
+            _buildInput(_codigoFisicoController, 'Código Físico', Icons.qr_code_2, 800),
+            const SizedBox(height: 16),
+            _buildInput(_locationController, 'Ubicación en Biblioteca', Icons.location_on, 900),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.yaviracOrange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.yaviracOrange.withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.yaviracOrange, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ejemplo: Estante A-3, Sección 2, Fila 5',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -624,7 +810,16 @@ class _AddBookScreenState extends State<AddBookScreen> {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: _isLoading ? null : _addBook,
+              onTap: _isLoading ? null : () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('🔴 BOTÓN PRESIONADO', style: GoogleFonts.outfit()),
+                    backgroundColor: Colors.purple,
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                _addBook();
+              },
               borderRadius: BorderRadius.circular(15),
               child: Center(
                 child: _isLoading

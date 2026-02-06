@@ -217,6 +217,29 @@ class _BookDetailScreenState extends State<BookDetailScreen> with TickerProvider
     print('📚 Título: ${widget.book['title']}');
     print('📚 URL del archivo: ${widget.book['file_url']}');
     print('📚 Formato: ${widget.book['format']}');
+    print('📚 Es físico: ${widget.book['is_physical']}');
+    
+    // Si es un libro físico, mostrar información de ubicación
+    if (widget.book['is_physical'] == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('📚 Libro disponible en biblioteca física'),
+              if (widget.book['physical_location'] != null)
+                Text('📍 Ubicación: ${widget.book['physical_location']}'),
+              if (widget.book['codigo_fisico'] != null)
+                Text('🏷️ Código: ${widget.book['codigo_fisico']}'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
     
     if (widget.book['file_url'] != null) {
       try {
@@ -804,16 +827,29 @@ class _BookDetailScreenState extends State<BookDetailScreen> with TickerProvider
                           shape: BoxShape.circle,
                           color: Colors.white.withOpacity(0.2),
                         ),
-                        child: const Icon(Icons.auto_stories, color: Colors.white, size: 24),
+                        child: Icon(
+                          widget.book['is_physical'] == true 
+                              ? Icons.library_books 
+                              : Icons.auto_stories, 
+                          color: Colors.white, 
+                          size: 24
+                        ),
                       ),
                       const SizedBox(width: 16),
-                      Text(
-                        'Leer Libro',
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          widget.book['is_physical'] == true 
+                              ? 'Disponible en\nBiblioteca Física'
+                              : 'Leer Libro',
+                          style: GoogleFonts.outfit(
+                            fontSize: widget.book['is_physical'] == true ? 16 : 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                            height: 1.2,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
                         ),
                       ),
                       const SizedBox(width: 12),
