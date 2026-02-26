@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,7 +10,9 @@ import '../../../data/services/supabase_auth_service.dart';
 import '../../../core/services/lazy_loading_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/optimized_theme.dart';
+import '../../../core/providers/theme_provider.dart';
 import '../../widgets/common_widgets.dart';
+import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
 import '../../../main.dart';
 import 'tabs/home_tab.dart';
@@ -16,8 +20,11 @@ import 'tabs/library_tab.dart';
 import 'tabs/videos_tab.dart';
 import '../admin/add_book_screen.dart';
 import '../admin/add_video_screen.dart';
+import '../admin/add_physical_book_screen.dart';
+import '../admin/categories_management_screen.dart';
 import 'users_management_screen.dart';
 import 'book_detail_screen.dart';
+import 'mobile_video_player.dart';
 import '../../../core/services/optimized_cache_service.dart';
 import '../../../core/widgets/lazy_tab_view.dart';
 import '../../widgets/optimized_modals.dart';
@@ -45,7 +52,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
     _loadUserDataAsync();
     OptimizedCacheService.instance.init();
   }
@@ -97,27 +104,18 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
   }
 
   void _performSearch(String query) {
-    if (query.trim().isEmpty) return;
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchQuery = '';
+        _cachedTabs.clear();
+      });
+      return;
+    }
     
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Resultados para "$query"'),
-        content: const SizedBox(
-          width: 400,
-          height: 200,
-          child: Center(
-            child: Text('Función de búsqueda en desarrollo'),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
-      ),
-    );
+    setState(() {
+      _searchQuery = query;
+      _cachedTabs.clear();
+    });
   }
 
   Widget _getSelectedPage() {
@@ -152,6 +150,10 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         return const _UserManagementTab();
       case 8:
         return const _RequestsTab();
+      case 9:
+        return const _CategoriesManagementTab();
+      case 10:
+        return _PhysicalBooksTab(canEdit: _canEdit, userRole: _userRole);
       default:
         return HomeTab(searchQuery: _searchQuery);
     }
@@ -162,12 +164,22 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     // Para móvil (APK) usar Drawer y BottomNavigationBar, para web usar sidebar fijo
     final isMobile = !kIsWeb;
     
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
     return Scaffold(
       drawer: isMobile ? _buildDrawer() : null,
       bottomNavigationBar: isMobile ? _buildBottomNavigationBar() : null,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.primaryGradient,
+        decoration: BoxDecoration(
+          gradient: isDark ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF0F172A),
+              Color(0xFF1E293B),
+            ],
+          ) : OptimizedTheme.primaryGradientLight,
         ),
         child: Row(
           children: [
@@ -244,14 +256,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
       backgroundColor: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.yaviracBlueDark.withOpacity(0.9),
-              AppColors.yaviracOrange.withOpacity(0.95),
-            ],
-          ),
+          gradient: Theme.of(context).brightness == Brightness.dark 
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0F172A),
+                    Color(0xFF1E293B),
+                  ],
+                )
+              : OptimizedTheme.primaryGradientLight,
         ),
         child: Column(
           children: [
@@ -268,14 +282,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     return Container(
       width: 280,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.yaviracBlueDark.withOpacity(0.9),
-            AppColors.yaviracOrange.withOpacity(0.95),
-          ],
-        ),
+        gradient: Theme.of(context).brightness == Brightness.dark 
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF0F172A),
+                    Color(0xFF1E293B),
+                  ],
+                )
+              : OptimizedTheme.primaryGradientLight,
       ),
       child: Column(
         children: [
@@ -299,7 +315,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.asset(
-                  'assets/images/yavirac.png',
+                  'assets/images/logo.jpeg',
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
                     Icons.school,
@@ -334,7 +350,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                     children: [
                       Text(
                         _userName,
-                        style: OptimizedTheme.bodyText.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+                        style: OptimizedTheme.getBodyText(context).copyWith(fontSize: 14, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                       Container(
@@ -371,19 +387,34 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         children: [
           _buildMenuItem(Icons.home, 'Inicio', 0),
           _buildMenuItem(Icons.library_books, 'Libros', 1),
+          _buildMenuItem(Icons.location_on, 'Libros Físicos', 10),
           _buildMenuItem(Icons.video_library, 'Videos', 2),
           _buildMenuItem(Icons.favorite, 'Favoritos', 3),
           _buildMenuItem(Icons.person, 'Perfil', 4),
           const Divider(color: Colors.white24, height: 32),
           _buildMenuItem(Icons.trending_up, 'Top 10 Libros', 5),
           if (_canEdit) _buildMenuItem(Icons.add, 'Agregar Contenido', 6),
+          if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.category, 'Gestionar Categorías', 9),
           if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.people, 'Gestión de Usuarios', 7),
           if (_userRole == 'admin' || _userRole == 'administrador') _buildMenuItem(Icons.help_center, 'Solicitudes', 8),
           _buildMenuItem(Icons.settings, 'Configuración', -1, onTap: () => setState(() => _selectedIndex = 4)),
           ListTile(
-            leading: const Icon(Icons.dark_mode, color: Colors.white70),
-            title: const Text('Modo Oscuro', style: TextStyle(color: Colors.white)),
-            onTap: () {},
+            leading: Icon(Icons.dark_mode, color: OptimizedTheme.getTextColor(context).withOpacity(0.7)),
+            title: Text('Modo Oscuro', style: TextStyle(color: OptimizedTheme.getTextColor(context))),
+            trailing: Switch(
+              value: Provider.of<ThemeProvider>(context).isDarkMode,
+              onChanged: (value) {
+                Provider.of<ThemeProvider>(context, listen: false).toggleTheme(value);
+                // Limpiar caché al cambiar tema
+                setState(() => _cachedTabs.clear());
+              },
+              activeColor: AppColors.yaviracOrange,
+            ),
+            onTap: () {
+               final provider = Provider.of<ThemeProvider>(context, listen: false);
+               provider.toggleTheme(!provider.isDarkMode);
+               setState(() => _cachedTabs.clear());
+            },
           ),
         ],
       ),
@@ -462,19 +493,33 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                 ),
               ),
             if (isMobile) const SizedBox(width: 16),
-            if (!isMobile) const Spacer(),
-            Text(
-              'Biblioteca Virtual Yavirac',
-              style: OptimizedTheme.heading2.copyWith(
-                fontSize: isMobile ? 18 : 24,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-                color: Colors.white,
+            Expanded(
+              flex: 20,
+              child: Container(
+                width: double.infinity,
+                child: Center(
+                  child: Text(
+                    'Repositorio Digital de la Biblioteca Alfredo Costales y Piedad Peñaherrera',
+                    style: OptimizedTheme.heading2.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: OptimizedTheme.getTextColor(context),
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ),
-            const Spacer(),
+            // Campo de búsqueda para móvil y web
+            if (isMobile) _buildMobileSearchField(),
             if (!isMobile) _buildSearchField(),
             if (!isMobile) _buildSearchButton(),
+            // Botón de búsqueda para móvil
+            if (isMobile) _buildMobileSearchButton(),
             if (!isMobile) const SizedBox(width: 12),
             if (!isMobile) Text(
               _userName,
@@ -501,6 +546,69 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
     );
   }
 
+  Widget _buildMobileSearchField() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _searchingNotifier,
+      builder: (context, isSearching, child) {
+        return isSearching
+            ? Expanded(
+                child: Container(
+                  height: 40,
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.yaviracOrange, width: 1),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: Colors.black, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Buscar...',
+                      hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    onChanged: (value) {
+                      if (value.trim().isNotEmpty) {
+                        _performSearch(value);
+                      }
+                    },
+                    onSubmitted: (value) {
+                      _searchingNotifier.value = false;
+                      if (value.trim().isNotEmpty) {
+                        _performSearch(value);
+                      } else {
+                        setState(() => _searchQuery = '');
+                      }
+                    },
+                    autofocus: true,
+                  ),
+                ),
+              )
+            : const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildMobileSearchButton() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _searchingNotifier,
+      builder: (context, isSearching, child) {
+        return IconButton(
+          icon: Icon(isSearching ? Icons.close : Icons.search, color: Colors.white),
+          onPressed: () {
+            _searchingNotifier.value = !_searchingNotifier.value;
+            if (!_searchingNotifier.value) {
+              _searchController.clear();
+              setState(() => _searchQuery = '');
+            }
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildSearchField() {
     return ValueListenableBuilder<bool>(
       valueListenable: _searchingNotifier,
@@ -523,10 +631,19 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
-                  onChanged: (value) => setState(() => _searchQuery = value),
+                  onChanged: (value) {
+                    // Búsqueda en tiempo real
+                    if (value.trim().isNotEmpty) {
+                      _performSearch(value);
+                    }
+                  },
                   onSubmitted: (value) {
                     _searchingNotifier.value = false;
-                    setState(() => _searchQuery = '');
+                    if (value.trim().isNotEmpty) {
+                      _performSearch(value);
+                    } else {
+                      setState(() => _searchQuery = '');
+                    }
                   },
                   autofocus: true,
                 ),
@@ -593,13 +710,16 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Icon(icon, color: Colors.white, size: 24),
+                  Icon(icon, color: isSelected 
+                      ? Colors.white 
+                      : OptimizedTheme.getTextColor(context).withOpacity(0.7), size: 24),
                   const SizedBox(width: 16),
                   Text(
                     title,
-                    style: OptimizedTheme.bodyText.copyWith(
+                    style: OptimizedTheme.getBodyText(context).copyWith(
                       fontSize: 16,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: isSelected ? Colors.white : OptimizedTheme.getTextColor(context),
                     ),
                   ),
                 ],
@@ -1144,52 +1264,131 @@ class _SearchResultsTab extends StatelessWidget {
   final String searchQuery;
   const _SearchResultsTab({required this.searchQuery});
 
-  Future<List<Map<String, dynamic>>> _searchBooks() async {
+  Future<void> _checkDatabaseContent() async {
     try {
-      final response = await Supabase.instance.client
+      final allBooks = await Supabase.instance.client.from('books').select().limit(1);
+      final allVideos = await Supabase.instance.client.from('videos').select().limit(1);
+      
+      print('📊 Total libros en BD: ${allBooks.length}');
+      print('📊 Total videos en BD: ${allVideos.length}');
+      
+      if (allBooks.isNotEmpty) {
+        print('📚 Columnas libros: ${allBooks.first.keys.toList()}');
+        print('📚 Ejemplo libro: ${allBooks.first}');
+      }
+      if (allVideos.isNotEmpty) {
+        print('🎥 Columnas videos: ${allVideos.first.keys.toList()}');
+        print('🎥 Ejemplo video: ${allVideos.first}');
+      }
+    } catch (e) {
+      print('❌ Error verificando BD: $e');
+    }
+  }
+
+  Future<Map<String, List<Map<String, dynamic>>>> _searchContent() async {
+    try {
+      print('🔍 Buscando: $searchQuery');
+      
+      // Buscar en libros
+      final booksResponse1 = await Supabase.instance.client
           .from('books')
           .select()
           .ilike('title', '%$searchQuery%');
       
-      final response2 = await Supabase.instance.client
+      final booksResponse2 = await Supabase.instance.client
           .from('books')
           .select()
           .ilike('author', '%$searchQuery%');
       
-      final allResults = [...response, ...response2];
-      final uniqueResults = <String, Map<String, dynamic>>{};
+      final booksResponse3 = await Supabase.instance.client
+          .from('books')
+          .select()
+          .ilike('category', '%$searchQuery%');
       
-      for (var book in allResults) {
-        uniqueResults[book['id']] = book;
+      // Buscar en videos
+      final videosResponse1 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('title', '%$searchQuery%');
+      
+      final videosResponse2 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('category', '%$searchQuery%');
+      
+      final videosResponse3 = await Supabase.instance.client
+          .from('videos')
+          .select()
+          .ilike('subcategory', '%$searchQuery%');
+      
+      // Combinar y eliminar duplicados
+      final allBooks = [...booksResponse1, ...booksResponse2, ...booksResponse3];
+      final uniqueBooks = <String, Map<String, dynamic>>{};
+      for (var book in allBooks) {
+        uniqueBooks[book['id']] = book;
       }
       
-      return uniqueResults.values.toList();
+      final allVideos = [...videosResponse1, ...videosResponse2, ...videosResponse3];
+      final uniqueVideos = <String, Map<String, dynamic>>{};
+      for (var video in allVideos) {
+        uniqueVideos[video['id']] = video;
+      }
+      
+      print('✅ Total únicos - Libros: ${uniqueBooks.length}, Videos: ${uniqueVideos.length}');
+      
+      return {
+        'books': uniqueBooks.values.toList(),
+        'videos': uniqueVideos.values.toList(),
+      };
     } catch (e) {
-      return [];
+      print('❌ Error en búsqueda: $e');
+      return {'books': [], 'videos': []};
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Verificar contenido de la BD al construir
+    _checkDatabaseContent();
+    
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Resultados para "$searchQuery"',
-            style: OptimizedTheme.heading2,
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () {
+                  // Limpiar búsqueda
+                  final homeState = context.findAncestorStateOfType<_UserHomeState>();
+                  homeState?._searchController.clear();
+                  homeState?.setState(() {
+                    homeState._searchQuery = '';
+                    homeState._cachedTabs.clear();
+                  });
+                },
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Resultados para "$searchQuery"',
+                  style: OptimizedTheme.heading2,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _searchBooks(),
+            child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+              future: _searchContent(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Colors.white));
                 }
                 
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                if (!snapshot.hasData) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1205,106 +1404,260 @@ class _SearchResultsTab extends StatelessWidget {
                   );
                 }
                 
-                return GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 0.75,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+                final books = snapshot.data!['books']!;
+                final videos = snapshot.data!['videos']!;
+                
+                if (books.isEmpty && videos.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.search_off, size: 80, color: Colors.white24),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No se encontraron resultados',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (books.isNotEmpty) ...[
+                        Text(
+                          'Libros (${books.length})',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: books.length,
+                          itemBuilder: (context, index) => _buildBookCard(context, books[index]),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                      if (videos.isNotEmpty) ...[
+                        Text(
+                          'Videos (${videos.length})',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 12),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: videos.length,
+                          itemBuilder: (context, index) => _buildVideoCard(context, videos[index]),
+                        ),
+                      ],
+                    ],
                   ),
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final book = snapshot.data![index];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => BookDetailScreen(book: book),
-                        ),
-                      ),
-                      child: GlassmorphicContainer(
-                        width: double.infinity,
-                        height: double.infinity,
-                        borderRadius: 8,
-                        blur: 8,
-                        alignment: Alignment.center,
-                        border: 0,
-                        linearGradient: LinearGradient(
-                          colors: [
-                            Colors.white.withOpacity(0.15),
-                            Colors.white.withOpacity(0.08),
-                          ],
-                        ),
-                        borderGradient: LinearGradient(
-                          colors: [
-                            AppColors.yaviracOrange.withOpacity(0.3),
-                            Colors.white.withOpacity(0.1),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: Container(
-                                margin: const EdgeInsets.all(6),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: book['cover_url'] != null
-                                      ? Image.network(
-                                          book['cover_url'],
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          errorBuilder: (_, __, ___) => Container(
-                                            color: AppColors.yaviracOrange.withOpacity(0.2),
-                                            child: const Icon(Icons.search, size: 30, color: Colors.white),
-                                          ),
-                                        )
-                                      : Container(
-                                          color: AppColors.yaviracOrange.withOpacity(0.2),
-                                          child: const Icon(Icons.search, size: 30, color: Colors.white),
-                                        ),
-                                ),
-                              ),
-                            ),
-                            Flexible(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      book['title'] ?? 'Sin título',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    Text(
-                                      book['author'] ?? 'Autor desconocido',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 8,
-                                        color: Colors.white70,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
                 );
               },
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBookCard(BuildContext context, Map<String, dynamic> book) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BookDetailScreen(book: book),
+        ),
+      ),
+      child: GlassmorphicContainer(
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 8,
+        blur: 8,
+        alignment: Alignment.center,
+        border: 0,
+        linearGradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderGradient: LinearGradient(
+          colors: [
+            AppColors.yaviracOrange.withOpacity(0.3),
+            Colors.white.withOpacity(0.1),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: const EdgeInsets.all(6),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: book['cover_url'] != null
+                      ? Image.network(
+                          book['cover_url'],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: AppColors.yaviracOrange.withOpacity(0.2),
+                            child: const Icon(Icons.book, size: 30, color: Colors.white),
+                          ),
+                        )
+                      : Container(
+                          color: AppColors.yaviracOrange.withOpacity(0.2),
+                          child: const Icon(Icons.book, size: 30, color: Colors.white),
+                        ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  children: [
+                    Text(
+                      book['title'] ?? 'Sin título',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      book['author'] ?? 'Autor desconocido',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 8,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoCard(BuildContext context, Map<String, dynamic> video) {
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => MobileVideoPlayer(video: video),
+        ),
+      ),
+      child: GlassmorphicContainer(
+        width: double.infinity,
+        height: double.infinity,
+        borderRadius: 8,
+        blur: 8,
+        alignment: Alignment.center,
+        border: 0,
+        linearGradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderGradient: LinearGradient(
+          colors: [
+            AppColors.yaviracBlueDark.withOpacity(0.3),
+            Colors.white.withOpacity(0.1),
+          ],
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              flex: 4,
+              child: Container(
+                margin: const EdgeInsets.all(6),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: video['thumbnail_url'] != null
+                          ? Image.network(
+                              video['thumbnail_url'],
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: AppColors.yaviracBlueDark.withOpacity(0.2),
+                                child: const Icon(Icons.video_library, size: 30, color: Colors.white),
+                              ),
+                            )
+                          : Container(
+                              color: AppColors.yaviracBlueDark.withOpacity(0.2),
+                              child: const Icon(Icons.video_library, size: 30, color: Colors.white),
+                            ),
+                    ),
+                    const Center(
+                      child: Icon(
+                        Icons.play_circle_filled,
+                        size: 24,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                child: Column(
+                  children: [
+                    Text(
+                      video['title'] ?? 'Sin título',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    Text(
+                      video['category'] ?? video['subcategory'] ?? 'Sin categoría',
+                      style: OptimizedTheme.caption.copyWith(
+                        fontSize: 8,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1332,6 +1685,145 @@ class _TopBooksTabState extends State<_TopBooksTab> {
     }
   }
 
+  Future<void> _exportStats([String format = 'csv']) async {
+    try {
+      // Obtener todas las estadísticas
+      final stats = await Supabase.instance.client
+          .from('book_stats')
+          .select('*, books(title, author, category)')
+          .order('open_count', ascending: false);
+      
+      String content;
+      String fileName;
+      String mimeType;
+      
+      switch (format) {
+        case 'json':
+          content = jsonEncode(stats);
+          fileName = 'estadisticas_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.json';
+          mimeType = 'application/json';
+          break;
+        case 'html':
+          content = _generateHtmlReport(stats);
+          fileName = 'reporte_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.html';
+          mimeType = 'text/html';
+          break;
+        default: // csv
+          content = _generateCsv(stats);
+          fileName = 'estadisticas_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.csv';
+          mimeType = 'text/csv';
+      }
+      
+      // Crear blob y descargar
+      final bytes = utf8.encode(content);
+      final blob = html.Blob([bytes], mimeType);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ Estadísticas exportadas en formato ${format.toUpperCase()}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error: $e')),
+      );
+    }
+  }
+
+  String _generateCsv(List<dynamic> stats) {
+    String csv = 'Título,Autor,Categoría,Veces Abierto,Última Apertura\n';
+    for (var stat in stats) {
+      final book = stat['books'];
+      csv += '"${book['title'] ?? 'Sin título'}",';
+      csv += '"${book['author'] ?? 'Sin autor'}",';
+      csv += '"${book['category'] ?? 'Sin categoría'}",';
+      csv += '${stat['open_count'] ?? 0},';
+      csv += '"${_formatDate(stat['updated_at'])}"\n';
+    }
+    return csv;
+  }
+
+  String _generateHtmlReport(List<dynamic> stats) {
+    final now = DateTime.now();
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reporte de Estadísticas - Biblioteca</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #1E3A8A; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .stats { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>📊 Reporte de Estadísticas de la Biblioteca</h1>
+    <div class="stats">
+        <p><strong>Fecha del reporte:</strong> ${now.day}/${now.month}/${now.year}</p>
+        <p><strong>Total de libros con estadísticas:</strong> ${stats.length}</p>
+        <p><strong>Total de aperturas:</strong> ${stats.fold<int>(0, (sum, stat) => sum + ((stat['open_count'] as int?) ?? 0))}</p>
+    </div>
+    <table>
+        <tr>
+            <th>Posición</th>
+            <th>Título</th>
+            <th>Autor</th>
+            <th>Categoría</th>
+            <th>Veces Abierto</th>
+            <th>Última Apertura</th>
+        </tr>
+${stats.asMap().entries.map((entry) {
+      final index = entry.key + 1;
+      final stat = entry.value;
+      final book = stat['books'];
+      return '''        <tr>
+            <td>$index</td>
+            <td>${book['title'] ?? 'Sin título'}</td>
+            <td>${book['author'] ?? 'Sin autor'}</td>
+            <td>${book['category'] ?? 'Sin categoría'}</td>
+            <td>${stat['open_count'] ?? 0}</td>
+            <td>${_formatDate(stat['updated_at'])}</td>
+        </tr>''';
+    }).join('\n')}
+    </table>
+</body>
+</html>''';
+  }
+
+  Future<bool> _isAdmin() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return false;
+      
+      final userData = await Supabase.instance.client
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+      
+      final role = userData['role']?.toString().toLowerCase() ?? '';
+      return role == 'admin' || role == 'administrador';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  String _formatDate(String? dateStr) {
+    if (dateStr == null) return 'N/A';
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1339,9 +1831,76 @@ class _TopBooksTabState extends State<_TopBooksTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Top 10 Libros Más Leídos',
-            style: OptimizedTheme.heading2,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Top 10 Libros Más Leídos',
+                  style: OptimizedTheme.heading2,
+                ),
+              ),
+              // Botón de exportar solo para admins
+              FutureBuilder<bool>(
+                future: _isAdmin(),
+                builder: (context, snapshot) {
+                  if (snapshot.data == true) {
+                    return PopupMenuButton<String>(
+                      onSelected: (format) => _exportStats(format),
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'csv',
+                          child: Row(
+                            children: [
+                              Icon(Icons.table_chart, size: 16),
+                              SizedBox(width: 8),
+                              Text('CSV (Excel)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'json',
+                          child: Row(
+                            children: [
+                              Icon(Icons.code, size: 16),
+                              SizedBox(width: 8),
+                              Text('JSON (Datos)'),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuItem(
+                          value: 'html',
+                          child: Row(
+                            children: [
+                              Icon(Icons.web, size: 16),
+                              SizedBox(width: 8),
+                              Text('HTML (Reporte)'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.yaviracOrange,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.download, size: 16, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text('Exportar', style: TextStyle(color: Colors.white)),
+                            SizedBox(width: 4),
+                            Icon(Icons.arrow_drop_down, size: 16, color: Colors.white),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -1444,7 +2003,7 @@ class _AddContentTab extends StatelessWidget {
                     context,
                     onSuccess: () {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Libro agregado exitosamente')),
+                        const SnackBar(content: Text('Libro digital agregado exitosamente')),
                       );
                     },
                   ),
@@ -1459,10 +2018,10 @@ class _AddContentTab extends StatelessWidget {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.library_books, size: 64, color: Colors.white),
+                        const Icon(Icons.cloud_upload, size: 64, color: Colors.white),
                         const SizedBox(height: 16),
                         Text(
-                          'Agregar Libros',
+                          'Libro Digital',
                           style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -1470,7 +2029,40 @@ class _AddContentTab extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => OptimizedModals.showAddPhysicalBookModal(
+                    context,
+                    onSuccess: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Libro físico agregado exitosamente')),
+                      );
+                    },
+                  ),
+                  child: Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFEA580C), Color(0xFFF97316)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.location_on, size: 64, color: Colors.white),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Libro Físico',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: GestureDetector(
                   onTap: () => OptimizedModals.showAddVideoModal(
@@ -1517,6 +2109,15 @@ class _UserManagementTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const UsersManagementScreen();
+  }
+}
+
+class _CategoriesManagementTab extends StatelessWidget {
+  const _CategoriesManagementTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const CategoriesManagementScreen();
   }
 }
 
@@ -1799,6 +2400,182 @@ class _RequestItem extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PhysicalBooksTab extends StatelessWidget {
+  final bool canEdit;
+  final String userRole;
+  
+  const _PhysicalBooksTab({required this.canEdit, required this.userRole});
+
+  Future<List<Map<String, dynamic>>> _loadPhysicalBooks() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('books')
+          .select()
+          .eq('is_physical_only', true)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error loading physical books: $e');
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Libros Físicos Disponibles',
+            style: OptimizedTheme.heading2,
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _loadPhysicalBooks(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                }
+                
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.location_on, size: 80, color: Colors.white24),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No hay libros físicos registrados',
+                          style: OptimizedTheme.heading3.copyWith(fontSize: 18, color: Colors.white54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    childAspectRatio: 0.75,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: snapshot.data!.length,
+                  itemBuilder: (context, index) {
+                    final book = snapshot.data![index];
+                    return GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookDetailScreen(book: book),
+                        ),
+                      ),
+                      child: GlassmorphicContainer(
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: 8,
+                        blur: 8,
+                        alignment: Alignment.center,
+                        border: 0,
+                        linearGradient: LinearGradient(
+                          colors: [
+                            Colors.green.withOpacity(0.15),
+                            Colors.green.withOpacity(0.08),
+                          ],
+                        ),
+                        borderGradient: LinearGradient(
+                          colors: [
+                            Colors.green.withOpacity(0.3),
+                            Colors.white.withOpacity(0.1),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: Container(
+                                margin: const EdgeInsets.all(6),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: book['cover_url'] != null
+                                      ? Image.network(
+                                          book['cover_url'],
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            color: Colors.green.withOpacity(0.2),
+                                            child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: Colors.green.withOpacity(0.2),
+                                          child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            Flexible(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      book['title'] ?? 'Sin título',
+                                      style: OptimizedTheme.caption.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    Text(
+                                      book['author'] ?? 'Autor desconocido',
+                                      style: OptimizedTheme.caption.copyWith(
+                                        fontSize: 8,
+                                        color: Colors.white70,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withOpacity(0.3),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'FÍSICO',
+                                        style: OptimizedTheme.caption.copyWith(
+                                          fontSize: 6,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

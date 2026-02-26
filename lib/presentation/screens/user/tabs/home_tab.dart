@@ -42,23 +42,55 @@ class HomeTab extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
-              Text(
-                '¡Bienvenido!',
-                style: OptimizedTheme.heading1.copyWith(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '¡Bienvenido!',
+                      style: OptimizedTheme.heading1.copyWith( // Header siempre tiene fondo oscuro (gradient), mantener blanco
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Descubre miles de libros y videos educativos',
+                      style: OptimizedTheme.bodyText.copyWith( // Header mantiene blanco
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Descubre miles de libros y videos educativos',
-                style: OptimizedTheme.bodyText.copyWith(
-                  fontSize: 16,
-                  color: Colors.white.withOpacity(0.9),
+              const SizedBox(width: 16),
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    'assets/images/1.jpeg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white.withOpacity(0.1),
+                      child: const Icon(Icons.auto_stories, size: 40, color: Colors.white),
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -113,6 +145,7 @@ class HomeTab extends StatelessWidget {
                   style: OptimizedTheme.heading3.copyWith(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
+                    color: Colors.white,
                   ),
                 ),
               ],

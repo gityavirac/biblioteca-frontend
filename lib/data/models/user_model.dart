@@ -37,7 +37,7 @@ class User {
   // Permisos específicos
   bool get canUploadContent => isAdmin || isBibliotecario || isProfesor;
   bool get canDeleteContent => isAdmin || isBibliotecario;
-  bool get canEditContent => isAdmin || isBibliotecario;
+  bool get canEditContent => isAdmin || isBibliotecario || isProfesor;  // ✅ Profesor puede editar
   bool get canManageUsers => isAdmin;
   bool get canViewStats => isAdmin || isBibliotecario;
 }

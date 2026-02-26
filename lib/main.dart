@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/optimized_theme.dart';
+import 'core/providers/theme_provider.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/auth/reset_password_screen.dart';
 import 'presentation/screens/user/user_home.dart';
@@ -15,14 +17,14 @@ void main() async {
     WidgetsFlutterBinding.ensureInitialized();
     
     // Mostrar app inmediatamente
-    runApp(const BibliotecaDigitalApp());
+    runApp(const AppState());
     
     // Inicializar Supabase en background
     _initializeSupabaseInBackground();
     
   } catch (e) {
     print('Error initializing app: $e');
-    runApp(const BibliotecaDigitalApp());
+    runApp(const AppState());
   }
 }
 
@@ -48,6 +50,20 @@ void _seedDataInBackground() {
       print('Error seeding data: $e');
     }
   });
+}
+
+class AppState extends StatelessWidget {
+  const AppState({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: const BibliotecaDigitalApp(),
+    );
+  }
 }
 
 class BibliotecaDigitalApp extends StatefulWidget {
@@ -108,11 +124,15 @@ class _BibliotecaDigitalAppState extends State<BibliotecaDigitalApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    
     return MaterialApp(
       navigatorKey: _navigatorKey,
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: OptimizedTheme.theme,
+      theme: OptimizedTheme.lightTheme,
+      darkTheme: OptimizedTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
       initialRoute: '/',
       routes: {
         '/': (context) => _showSplash
@@ -124,10 +144,12 @@ class _BibliotecaDigitalAppState extends State<BibliotecaDigitalApp> {
                 },
               )
             : _isCheckingSession
-                ? const Scaffold(
-                    backgroundColor: Color(0xFF0F172A),
+                ? Scaffold(
+                    backgroundColor: themeProvider.isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                     body: Center(
-                      child: CircularProgressIndicator(color: Colors.white),
+                      child: CircularProgressIndicator(
+                        color: themeProvider.isDarkMode ? Colors.white : OptimizedTheme.primaryColor,
+                      ),
                     ),
                   )
                 : _initialScreen,

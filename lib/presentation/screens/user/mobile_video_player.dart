@@ -6,9 +6,6 @@ import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/optimized_theme.dart';
 
-// Solo para web
-import 'dart:html' as html if (dart.library.html) 'dart:html';
-
 class MobileVideoPlayer extends StatefulWidget {
   final Map<String, dynamic> video;
 
@@ -25,19 +22,17 @@ class _MobileVideoPlayerState extends State<MobileVideoPlayer> {
   bool _wasFullScreen = false;
   Timer? _focusTimer;
   final FocusNode _focusNode = FocusNode();
+  final FocusNode _overlayFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _initPlayer();
     
-    // Escuchar evento ESC desde JavaScript (solo web)
-    if (kIsWeb) {
-      html.window.addEventListener('flutter-escape', (event) {
-        print('🎬 DEBUG: ESC intercepted from JavaScript');
-        Navigator.of(context).pop();
-      });
-    }
+    // Forzar foco después de un delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
   
   void _setupFullscreenListener() {
@@ -108,19 +103,24 @@ class _MobileVideoPlayerState extends State<MobileVideoPlayer> {
 
   @override
   void dispose() {
+    _focusTimer?.cancel();
+    _focusNode.dispose();
+    _overlayFocusNode.dispose();
     _controller?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return RawKeyboardListener(
-      focusNode: FocusNode(),
+    return KeyboardListener(
+      focusNode: _focusNode,
       autofocus: true,
-      onKey: (RawKeyEvent event) {
-        if (event is RawKeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+      onKeyEvent: (KeyEvent event) {
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
           print('🎬 DEBUG: ESC pressed - closing video');
-          Navigator.of(context).pop();
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
         }
       },
       child: WillPopScope(
@@ -131,7 +131,9 @@ class _MobileVideoPlayerState extends State<MobileVideoPlayer> {
         child: GestureDetector(
           onDoubleTap: () {
             print('🎬 DEBUG: Double tap detected - closing video');
-            Navigator.of(context).pop();
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
           },
           child: Scaffold(
             backgroundColor: Colors.black,
@@ -168,6 +170,17 @@ class _MobileVideoPlayerState extends State<MobileVideoPlayer> {
                     : YoutubePlayer(
                         controller: _controller!,
                       ),
+                // Overlay invisible para capturar ESC
+                Positioned.fill(
+                  child: Focus(
+                    focusNode: _overlayFocusNode,
+                    autofocus: true,
+                    child: Container(
+                      color: Colors.transparent,
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
                 // Información compacta abajo
                 if (_controller != null && !_hasError)
                   Positioned(

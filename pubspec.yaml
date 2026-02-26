@@ -38,6 +38,7 @@ dependencies:
   
   # Efectos mínimos
   animate_do: ^4.2.0
+  provider: ^6.1.5+1
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +49,4 @@ flutter:
   uses-material-design: true
   
   assets:
-    - assets/images/yavirac.png
-    - assets/images/nuevo.png
-    - assets/images/vision.jpg
+    - assets/images/

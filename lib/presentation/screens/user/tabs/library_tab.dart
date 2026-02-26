@@ -29,14 +29,35 @@ class LibraryTab extends StatefulWidget {
 class _LibraryTabState extends State<LibraryTab> {
   String? selectedCategory;
   bool showCategoryAccordion = false;
+  Map<String, List<String>> categories = {};
+  bool _loadingCategories = true;
   
-  final categories = {
-    'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
-    'Marketing': ['Digital', 'Tradicional', 'Redes Sociales', 'SEO'],
-    'Guía Nacional de Turismo': ['Costas', 'Sierra', 'Oriente', 'Galápagos'],
-    'Arte Culinaria': ['Cocina Nacional', 'Cocina Internacional', 'Repostería', 'Bebidas'],
-    'Idiomas': ['Inglés', 'Francés', 'Alemán', 'Italiano']
-  };
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('categories')
+          .select()
+          .eq('is_active', true)
+          .order('name');
+      
+      setState(() {
+        categories = {};
+        for (var category in response) {
+          categories[category['name']] = ['General']; // Subcategoría por defecto
+        }
+        _loadingCategories = false;
+      });
+    } catch (e) {
+      print('Error cargando categorías: $e');
+      setState(() => _loadingCategories = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,15 +75,18 @@ class _LibraryTabState extends State<LibraryTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CategoryAccordion(
-            categories: categories,
-            showAccordion: showCategoryAccordion,
-            onToggle: () => setState(() => showCategoryAccordion = !showCategoryAccordion),
-            onCategorySelected: (category) => setState(() {
-              selectedCategory = category;
-              showCategoryAccordion = false;
-            }),
-          ),
+          if (_loadingCategories)
+            const Center(child: CircularProgressIndicator(color: Colors.white))
+          else
+            CategoryAccordion(
+              categories: categories,
+              showAccordion: showCategoryAccordion,
+              onToggle: () => setState(() => showCategoryAccordion = !showCategoryAccordion),
+              onCategorySelected: (category) => setState(() {
+                selectedCategory = category;
+                showCategoryAccordion = false;
+              }),
+            ),
           const SizedBox(height: 32),
           _buildBookSection('Top 10 Libros', _getTopBooks()),
           const SizedBox(height: 32),

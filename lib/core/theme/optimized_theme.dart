@@ -6,7 +6,13 @@ class OptimizedTheme {
   static const Color secondaryColor = Color(0xFFEF4444);
   static const Color accentColor = Color(0xFFF59E0B);
   
-  // Gradientes optimizados
+  // Colores dedicados para tema claro
+  static const Color lightScaffold = Color(0xFFF1F5F9);
+  static const Color lightSurface = Colors.white;
+  static const Color lightTextPrimary = Color(0xFF0F172A);
+  static const Color lightTextSecondary = Color(0xFF475569);
+
+  // Gradientes optimizados (Dark Mode)
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
@@ -17,7 +23,18 @@ class OptimizedTheme {
     ],
   );
 
-  // Estilos de texto usando fuentes del sistema
+  // Gradientes optimizados (Light Mode)
+  static const LinearGradient primaryGradientLight = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [
+      Color(0xFF3B82F6),
+      Color(0xFF60A5FA),
+      Color(0xFF2563EB),
+    ],
+  );
+
+  // Estilos de texto usando fuentes del sistema (Estáticos - Legacy/Dark default)
   static const TextStyle heading1 = TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.bold,
@@ -60,6 +77,21 @@ class OptimizedTheme {
     fontFamily: 'system-ui',
   );
 
+  // --- Métodos Dinámicos para Texto ---
+  
+  static bool isDark(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark;
+  }
+
+  static Color getTextColor(BuildContext context) {
+    return isDark(context) ? Colors.white : lightTextPrimary;
+  }
+
+  static TextStyle getHeading1(BuildContext context) => heading1.copyWith(color: getTextColor(context));
+  static TextStyle getHeading2(BuildContext context) => heading2.copyWith(color: getTextColor(context));
+  static TextStyle getHeading3(BuildContext context) => heading3.copyWith(color: getTextColor(context));
+  static TextStyle getBodyText(BuildContext context) => bodyText.copyWith(color: getTextColor(context));
+  
   // Decoraciones optimizadas
   static BoxDecoration glassmorphicDecoration = BoxDecoration(
     color: Colors.white.withOpacity(0.1),
@@ -80,10 +112,11 @@ class OptimizedTheme {
     border: Border.all(color: Colors.white.withOpacity(0.1)),
   );
 
-  // Tema completo
-  static ThemeData get theme => ThemeData(
+  // Tema Oscuro (Original)
+  static ThemeData get darkTheme => ThemeData(
     primarySwatch: Colors.blue,
     primaryColor: primaryColor,
+    brightness: Brightness.dark,
     scaffoldBackgroundColor: const Color(0xFF0F172A),
     appBarTheme: const AppBarTheme(
       backgroundColor: Colors.transparent,
@@ -123,4 +156,57 @@ class OptimizedTheme {
       hintStyle: const TextStyle(color: Colors.white54, fontFamily: 'system-ui'),
     ),
   );
+
+  // Tema Claro (Nuevo)
+  static ThemeData get lightTheme => ThemeData(
+    primarySwatch: Colors.blue,
+    primaryColor: primaryColor,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: lightScaffold,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      titleTextStyle: TextStyle(
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        color: lightTextPrimary,
+        fontFamily: 'system-ui',
+      ),
+      iconTheme: IconThemeData(color: lightTextPrimary),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        textStyle: const TextStyle(
+          fontWeight: FontWeight.w600,
+          fontFamily: 'system-ui',
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: primaryColor),
+      ),
+      labelStyle: const TextStyle(color: lightTextSecondary, fontFamily: 'system-ui'),
+      hintStyle: const TextStyle(color: Colors.grey, fontFamily: 'system-ui'),
+    ),
+  );
+  
+  // Propiedad legacy para compatibilidad
+  static ThemeData get theme => darkTheme;
 }
