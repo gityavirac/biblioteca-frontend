@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1711,11 +1712,13 @@ class _TopBooksTabState extends State<_TopBooksTab> {
         default: // csv
           content = _generateCsv(stats);
           fileName = 'estadisticas_biblioteca_${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}.csv';
-          mimeType = 'text/csv';
+          mimeType = 'text/csv;charset=utf-8';
       }
       
-      // Crear blob y descargar
-      final bytes = utf8.encode(content);
+      // Crear blob con BOM para UTF-8
+      final utf8BOM = [0xEF, 0xBB, 0xBF];
+      final contentBytes = utf8.encode(content);
+      final bytes = Uint8List.fromList([...utf8BOM, ...contentBytes]);
       final blob = html.Blob([bytes], mimeType);
       final url = html.Url.createObjectUrlFromBlob(blob);
       final anchor = html.AnchorElement(href: url)
@@ -1734,15 +1737,37 @@ class _TopBooksTabState extends State<_TopBooksTab> {
   }
 
   String _generateCsv(List<dynamic> stats) {
-    String csv = 'Título,Autor,Categoría,Veces Abierto,Última Apertura\n';
-    for (var stat in stats) {
+    final now = DateTime.now();
+    String csv = '';
+    
+    // Encabezado del reporte
+    csv += '"REPORTE DE ESTADÍSTICAS - BIBLIOTECA YAVIRAC"\n';
+    csv += '"Fecha de generación: ${now.day}/${now.month}/${now.year} ${now.hour}:${now.minute.toString().padLeft(2, '0')}"\n';
+    csv += '"Total de libros: ${stats.length}"\n';
+    csv += '"Total de lecturas: ${stats.fold<int>(0, (sum, stat) => sum + ((stat['open_count'] as int?) ?? 0))}"\n';
+    csv += '\n';
+    
+    // Encabezados de columnas
+    csv += 'Posición,Título,Autor,Categoría,Veces Leído,Última Lectura\n';
+    
+    // Datos de los libros
+    for (int i = 0; i < stats.length; i++) {
+      final stat = stats[i];
       final book = stat['books'];
-      csv += '"${book['title'] ?? 'Sin título'}",';
-      csv += '"${book['author'] ?? 'Sin autor'}",';
-      csv += '"${book['category'] ?? 'Sin categoría'}",';
+      final position = i + 1;
+      
+      csv += '$position,';
+      csv += '"${(book['title'] ?? 'Sin título').toString().replaceAll('"', '""')}",';
+      csv += '"${(book['author'] ?? 'Sin autor').toString().replaceAll('"', '""')}",';
+      csv += '"${(book['category'] ?? 'Sin categoría').toString().replaceAll('"', '""')}",';
       csv += '${stat['open_count'] ?? 0},';
       csv += '"${_formatDate(stat['updated_at'])}"\n';
     }
+    
+    csv += '\n';
+    csv += '"--- FIN DEL REPORTE ---"\n';
+    csv += '"Generado por: Sistema de Biblioteca Digital Yavirac"\n';
+    
     return csv;
   }
 

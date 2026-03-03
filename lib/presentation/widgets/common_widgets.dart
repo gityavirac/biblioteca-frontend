@@ -240,7 +240,7 @@ class BookCard extends StatelessWidget {
 }
 
 // Widget para listas horizontales de contenido (libros y videos)
-class HorizontalBookList extends StatelessWidget {
+class HorizontalBookList extends StatefulWidget {
   final Future<List<Map<String, dynamic>>> future;
   final String searchQuery;
   final bool isVideoList;
@@ -251,13 +251,57 @@ class HorizontalBookList extends StatelessWidget {
     this.searchQuery = '',
     this.isVideoList = false,
   });
+
+  @override
+  State<HorizontalBookList> createState() => _HorizontalBookListState();
+}
+
+class _HorizontalBookListState extends State<HorizontalBookList> {
+  final ScrollController _scrollController = ScrollController();
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateScrollButtons);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateScrollButtons() {
+    setState(() {
+      _canScrollLeft = _scrollController.offset > 0;
+      _canScrollRight = _scrollController.offset < _scrollController.position.maxScrollExtent;
+    });
+  }
+
+  void _scrollLeft() {
+    _scrollController.animateTo(
+      _scrollController.offset - 300,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _scrollRight() {
+    _scrollController.animateTo(
+      _scrollController.offset + 300,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
   
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 200,
       child: FutureBuilder<List<Map<String, dynamic>>>(
-        future: future,
+        future: widget.future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return AppWidgets.loadingIndicator;
@@ -269,17 +313,67 @@ class HorizontalBookList extends StatelessWidget {
           
           final items = _filterItems(snapshot.data!);
           
-          return ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: isVideoList 
-                    ? VideoCard(video: items[index])
-                    : BookCard(book: items[index]),
-              );
-            },
+          // Actualizar botones después de que se construya la lista
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              _updateScrollButtons();
+            }
+          });
+          
+          return Stack(
+            children: [
+              ListView.builder(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: widget.isVideoList 
+                        ? VideoCard(video: items[index])
+                        : BookCard(book: items[index]),
+                  );
+                },
+              ),
+              // Flecha izquierda
+              if (_canScrollLeft)
+                Positioned(
+                  left: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                        onPressed: _scrollLeft,
+                      ),
+                    ),
+                  ),
+                ),
+              // Flecha derecha
+              if (_canScrollRight)
+                Positioned(
+                  right: 8,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_forward_ios, color: Colors.white),
+                        onPressed: _scrollRight,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
       ),
@@ -287,12 +381,12 @@ class HorizontalBookList extends StatelessWidget {
   }
   
   List<Map<String, dynamic>> _filterItems(List<Map<String, dynamic>> items) {
-    if (searchQuery.isEmpty) return items;
+    if (widget.searchQuery.isEmpty) return items;
     
     return items.where((item) {
       final title = (item['title'] ?? '').toString().toLowerCase();
       final author = (item['author'] ?? item['channel'] ?? '').toString().toLowerCase();
-      final query = searchQuery.toLowerCase();
+      final query = widget.searchQuery.toLowerCase();
       return title.contains(query) || author.contains(query);
     }).toList();
   }
@@ -333,6 +427,7 @@ class DataService {
       final response = await Supabase.instance.client
           .from('books')
           .select()
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false)
           .limit(10);
       return response;
@@ -346,6 +441,7 @@ class DataService {
       final response = await Supabase.instance.client
           .from('books')
           .select()
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false)
           .limit(20);
       return response;

@@ -109,6 +109,7 @@ class _LibraryTabState extends State<LibraryTab> {
       final response = await Supabase.instance.client
           .from('books')
           .select()
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false)
           .limit(10);
       
@@ -130,6 +131,7 @@ class _LibraryTabState extends State<LibraryTab> {
       final response = await Supabase.instance.client
           .from('books')
           .select()
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false)
           .limit(20);
       
@@ -150,6 +152,7 @@ class _LibraryTabState extends State<LibraryTab> {
       final response = await Supabase.instance.client
           .from('books')
           .select()
+          .isFilter('deleted_at', null)
           .order('created_at', ascending: false)
           .range(page * limit, (page + 1) * limit - 1);
       

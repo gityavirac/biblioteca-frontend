@@ -6,7 +6,7 @@ import 'package:glassmorphism/glassmorphism.dart';
 import '../../data/services/cache_service.dart';
 import '../screens/user/mobile_video_player.dart';
 
-class VideoListWidget extends StatelessWidget {
+class VideoListWidget extends StatefulWidget {
   final Future<List<Map<String, dynamic>>> future;
   final bool canEdit;
   final String userRole;
@@ -21,9 +21,55 @@ class VideoListWidget extends StatelessWidget {
   });
 
   @override
+  State<VideoListWidget> createState() => _VideoListWidgetState();
+}
+
+class _VideoListWidgetState extends State<VideoListWidget> {
+  final ScrollController _scrollController = ScrollController();
+  bool _canScrollLeft = false;
+  bool _canScrollRight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateScrollButtons);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateScrollButtons() {
+    if (mounted) {
+      setState(() {
+        _canScrollLeft = _scrollController.offset > 0;
+        _canScrollRight = _scrollController.offset < _scrollController.position.maxScrollExtent;
+      });
+    }
+  }
+
+  void _scrollLeft() {
+    _scrollController.animateTo(
+      _scrollController.offset - 300,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _scrollRight() {
+    _scrollController.animateTo(
+      _scrollController.offset + 300,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: future,
+      future: widget.future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator(color: Colors.white)));
@@ -31,6 +77,14 @@ class VideoListWidget extends StatelessWidget {
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return SizedBox(height: 200, child: Center(child: Text('No hay videos disponibles', style: GoogleFonts.outfit(color: Colors.white70))));
         }
+        
+        // Actualizar botones después de que se construya la lista
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _updateScrollButtons();
+          }
+        });
+        
         return _buildVideoList(snapshot.data!, context);
       },
     );
@@ -39,174 +93,217 @@ class VideoListWidget extends StatelessWidget {
   Widget _buildVideoList(List<Map<String, dynamic>> videos, BuildContext context) {
     return SizedBox(
       height: 200,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: videos.length,
-        itemBuilder: (context, index) {
-          final video = videos[index];
-          return Container(
-            width: 280,
-            margin: const EdgeInsets.only(right: 16),
-            child: Stack(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    print('🎬 DEBUG: Tapping video: ${video['title']}');
-                    print('🎬 DEBUG: Video data: $video');
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MobileVideoPlayer(video: video),
-                      ),
-                    );
-                  },
-                  child: GlassmorphicContainer(
-                    width: double.infinity,
-                    height: double.infinity,
-                    borderRadius: 12,
-                    blur: 10,
-                    alignment: Alignment.center,
-                    border: 0,
-                    linearGradient: LinearGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.1),
-                        Colors.white.withOpacity(0.05),
-                      ],
-                    ),
-                    borderGradient: LinearGradient(
-                      colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.1),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                            child: video['thumbnail_url'] != null
-                                ? Image.network(
-                                    video['thumbnail_url'],
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: Colors.grey.shade800,
-                                      child: const Icon(Icons.video_library, size: 40, color: Colors.white54),
-                                    ),
-                                  )
-                                : Container(
-                                    color: Colors.grey.shade800,
-                                    child: const Icon(Icons.video_library, size: 40, color: Colors.white54),
-                                  ),
+      child: Stack(
+        children: [
+          ListView.builder(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            itemCount: videos.length,
+            itemBuilder: (context, index) {
+              final video = videos[index];
+              return Container(
+                width: 280,
+                margin: const EdgeInsets.only(right: 16),
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        print('🎬 DEBUG: Tapping video: ${video['title']}');
+                        print('🎬 DEBUG: Video data: $video');
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MobileVideoPlayer(video: video),
                           ),
+                        );
+                      },
+                      child: GlassmorphicContainer(
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: 12,
+                        blur: 10,
+                        alignment: Alignment.center,
+                        border: 0,
+                        linearGradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.1),
+                            Colors.white.withOpacity(0.05),
+                          ],
                         ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    video['title'] ?? 'Sin título',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    video['category'] ?? 'Sin categoría',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 10,
-                                      color: Colors.white70,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (video['views'] != null)
-                                  Flexible(
-                                    child: Text(
-                                      '${video['views']} vistas',
-                                      style: GoogleFonts.outfit(
-                                        fontSize: 9,
-                                        color: Colors.white54,
+                        borderGradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.2),
+                            Colors.white.withOpacity(0.1),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                child: video['thumbnail_url'] != null
+                                    ? Image.network(
+                                        video['thumbnail_url'],
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: Colors.grey.shade800,
+                                          child: const Icon(Icons.video_library, size: 40, color: Colors.white54),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: Colors.grey.shade800,
+                                        child: const Icon(Icons.video_library, size: 40, color: Colors.white54),
                                       ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
+                              ),
                             ),
-                          ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        video['title'] ?? 'Sin título',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Flexible(
+                                      child: Text(
+                                        video['category'] ?? 'Sin categoría',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          color: Colors.white70,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (video['views'] != null)
+                                      Flexible(
+                                        child: Text(
+                                          '${video['views']} vistas',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 9,
+                                            color: Colors.white54,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
+                    if (widget.canEdit && (widget.userRole == 'bibliotecario' || widget.userRole == 'admin' || 
+                        (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: PopupMenuButton<String>(
+                          icon: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.more_vert, color: Colors.white, size: 16),
+                          ),
+                          onSelected: (value) => _handleMenuAction(value, video, context),
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 16),
+                                  SizedBox(width: 8),
+                                  Text('Editar'),
+                                ],
+                              ),
+                            ),
+                            if (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete, size: 16, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+          // Flecha izquierda
+          if (_canScrollLeft)
+            Positioned(
+              left: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                    onPressed: _scrollLeft,
                   ),
                 ),
-                if (canEdit && (userRole == 'bibliotecario' || userRole == 'admin' || 
-                    (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
-                  Positioned(
-                    top: 4,
-                    right: 4,
-                    child: PopupMenuButton<String>(
-                      icon: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.more_vert, color: Colors.white, size: 16),
-                      ),
-                      onSelected: (value) => _handleMenuAction(value, video, context),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 16),
-                              SizedBox(width: 8),
-                              Text('Editar'),
-                            ],
-                          ),
-                        ),
-                        if (userRole == 'admin' || (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete, size: 16, color: Colors.red),
-                                SizedBox(width: 8),
-                                Text('Eliminar', style: TextStyle(color: Colors.red)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
+              ),
             ),
-          );
-        },
+          // Flecha derecha
+          if (_canScrollRight)
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios, color: Colors.white),
+                    onPressed: _scrollRight,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
   void _handleMenuAction(String action, Map<String, dynamic> video, BuildContext context) {
-    print('🎬 DEBUG: Action: $action, UserRole: $userRole');
+    print('🎬 DEBUG: Action: $action, UserRole: ${widget.userRole}');
     print('🎬 DEBUG: Video created_by: ${video['created_by']}');
     print('🎬 DEBUG: Current user: ${Supabase.instance.client.auth.currentUser?.id}');
     
     if (action == 'edit') {
       print('🎬 DEBUG: Calling _showEditDialog');
       _showEditDialog(context, video);
-    } else if (action == 'delete' && (userRole == 'admin' || (userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
+    } else if (action == 'delete' && (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
       print('🎬 DEBUG: Calling _showDeleteDialog');
       _showDeleteDialog(context, video);
     } else {
@@ -324,7 +421,7 @@ class VideoListWidget extends StatelessWidget {
                   }).eq('id', video['id']);
                   
                   Navigator.pop(context);
-                  onRefresh();
+                  widget.onRefresh();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Video actualizado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
                   );
@@ -368,7 +465,7 @@ class VideoListWidget extends StatelessWidget {
                 print('🎬 DEBUG: Delete result: $result');
                 print('🎬 DEBUG: Video deleted successfully');
                 print('🎬 DEBUG: Calling onRefresh()');
-                onRefresh();
+                widget.onRefresh();
                 print('🎬 DEBUG: onRefresh() called');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
