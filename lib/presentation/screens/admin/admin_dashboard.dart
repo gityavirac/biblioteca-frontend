@@ -1,3 +1,4 @@
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glassmorphism/glassmorphism.dart';
@@ -124,8 +125,119 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 }
 
-class _DashboardTab extends StatelessWidget {
+class _DashboardTab extends StatefulWidget {
   const _DashboardTab();
+
+  @override
+  State<_DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<_DashboardTab> {
+  bool _isExporting = false;
+
+  Future<void> _exportCSV() async {
+    setState(() => _isExporting = true);
+    
+    try {
+      final response = await Supabase.instance.client
+          .from('book_stats')
+          .select('''
+            book_id,
+            open_count,
+            books (
+              title,
+              author,
+              category,
+              format,
+              created_at
+            )
+          ''')
+          .order('open_count', ascending: false)
+          .limit(15);
+
+      final buffer = StringBuffer();
+      // Header con información del reporte
+      buffer.writeln('REPORTE DE ESTADÍSTICAS - BIBLIOTECA YAVIRAC');
+      buffer.writeln('Fecha de generación: ${_formatDate(DateTime.now())}');
+      buffer.writeln('Total de libros: ${response.length}');
+      buffer.writeln('');
+      buffer.writeln('DESCRIPCIÓN DE CAMPOS:');
+      buffer.writeln('- Posición: Ranking de popularidad del libro');
+      buffer.writeln('- Título: Nombre completo del libro');
+      buffer.writeln('- Autor: Autor o autores del libro');
+      buffer.writeln('- Categoría: Clasificación temática');
+      buffer.writeln('- Veces Leído: Número total de lecturas registradas');
+      buffer.writeln('- Formato: Tipo de libro (Digital/Físico)');
+      buffer.writeln('');
+      buffer.writeln('RANKING DE LIBROS MÁS LEÍDOS:');
+      buffer.writeln('');
+      buffer.writeln('Posición    Título                          Autor                     Categoría            Veces Leído    Formato');
+      buffer.writeln('--------    -----                           -----                     ---------            -----------    -------');
+      
+      for (int i = 0; i < response.length; i++) {
+        final item = response[i];
+        final book = item['books'] as Map<String, dynamic>?;
+        if (book != null) {
+          final pos = (i + 1).toString().padRight(12);
+          final title = book['title'].toString().length > 30 
+              ? '${book['title'].toString().substring(0, 27)}...'
+              : book['title'].toString().padRight(32);
+          final author = book['author'].toString().length > 25
+              ? '${book['author'].toString().substring(0, 22)}...'
+              : book['author'].toString().padRight(26);
+          final category = book['category'].toString().length > 20
+              ? '${book['category'].toString().substring(0, 17)}...'
+              : book['category'].toString().padRight(21);
+          final count = item['open_count'].toString().padRight(15);
+          final format = book['format'].toString();
+          
+          buffer.writeln('$pos$title$author$category$count$format');
+        }
+      }
+      
+      buffer.writeln('');
+      buffer.writeln('--- FIN DEL REPORTE ---');
+      buffer.writeln('Generado por: Sistema de Biblioteca Digital Yavirac');
+      
+      final bom = '\uFEFF';
+      final content = bom + buffer.toString();
+      final bytes = content.codeUnits;
+      final blob = html.Blob([bytes], 'text/csv');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.document.createElement('a') as html.AnchorElement
+        ..href = url
+        ..style.display = 'none'
+        ..download = 'reporte_biblioteca_${DateTime.now().millisecondsSinceEpoch}.csv';
+      html.document.body?.children.add(anchor);
+      anchor.click();
+      html.document.body?.children.remove(anchor);
+      html.Url.revokeObjectUrl(url);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Reporte exportado correctamente', style: GoogleFonts.outfit()),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error al exportar: $e', style: GoogleFonts.outfit()),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +246,24 @@ class _DashboardTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Estadísticas', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Estadísticas', style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _isExporting ? null : _exportCSV,
+                icon: _isExporting 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+                    : const Icon(Icons.file_download),
+                label: Text('Exportar CSV', style: GoogleFonts.outfit()),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           const Row(
             children: [
