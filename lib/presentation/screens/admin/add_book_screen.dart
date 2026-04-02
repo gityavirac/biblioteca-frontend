@@ -61,6 +61,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
   Future<void> _pickCover() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
+      withData: true,
     );
 
     if (result != null) {
@@ -207,7 +208,15 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir portada si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedCover != null) {
         try {
-          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
+          final safeName = _titleController.text
+              .replaceAll(RegExp(r'[áàäâã]'), 'a')
+              .replaceAll(RegExp(r'[éèëê]'), 'e')
+              .replaceAll(RegExp(r'[íìïî]'), 'i')
+              .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+              .replaceAll(RegExp(r'[úùüû]'), 'u')
+              .replaceAll(RegExp(r'[ñ]'), 'n')
+              .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_$safeName.jpg';
           
           if (_selectedCover!.bytes != null) {
             await Supabase.instance.client.storage

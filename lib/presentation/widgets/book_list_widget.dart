@@ -688,7 +688,15 @@ class _BookListWidgetState extends State<BookListWidget> {
                   if (useCoverUpload && selectedCover != null) {
                     print('📝 Subiendo nueva portada...');
                     try {
-                      final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${titleController.text.replaceAll(' ', '_')}.jpg';
+                      final safeName = titleController.text
+                          .replaceAll(RegExp(r'[áàäâã]'), 'a')
+                          .replaceAll(RegExp(r'[éèëê]'), 'e')
+                          .replaceAll(RegExp(r'[íìïî]'), 'i')
+                          .replaceAll(RegExp(r'[óòöôõ]'), 'o')
+                          .replaceAll(RegExp(r'[úùüû]'), 'u')
+                          .replaceAll(RegExp(r'[ñ]'), 'n')
+                          .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
+                      final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_$safeName.jpg';
                       
                       if (selectedCover!.bytes != null) {
                         await Supabase.instance.client.storage
