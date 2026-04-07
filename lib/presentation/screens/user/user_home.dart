@@ -500,7 +500,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
                 width: double.infinity,
                 child: Center(
                   child: Text(
-                    'Repositorio Digital de la Biblioteca Alfredo Costales y Piedad Peñaherrera',
+                    'Repositorio Digital de la Biblioteca Piedad Peñaherrera y Alfredo Costales',
                     style: OptimizedTheme.heading2.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -893,45 +893,566 @@ class _ProfileTabState extends State<_ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: Colors.white.withOpacity(0.1),
-            child: const Icon(Icons.person, size: 50, color: Colors.white),
+    final isWide = MediaQuery.of(context).size.width > 700;
+
+    return FutureBuilder<Map<String, String>>(
+      future: _getUserData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Colors.white));
+        }
+        final userData = snapshot.data ?? {'name': 'Usuario', 'email': 'user@biblioteca.com'};
+        final name = userData['name']!;
+        final email = userData['email']!;
+        final role = widget.userRole;
+        final initial = name.isNotEmpty ? name[0].toUpperCase() : 'U';
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: isWide ? 48 : 16,
+            vertical: 32,
           ),
-          const SizedBox(height: 16),
-          FutureBuilder<Map<String, String>>(
-            key: ValueKey(DateTime.now().millisecondsSinceEpoch), // Forzar rebuild
-            future: _getUserData(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const CircularProgressIndicator(color: Colors.white);
-              }
-              
-              final userData = snapshot.data ?? {'name': 'Usuario', 'email': 'user@biblioteca.com'};
-              
-              return Column(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: Column(
                 children: [
-                  Text(
-                    userData['name']!,
-                    style: OptimizedTheme.heading2,
+                  // Hero card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1E3A8A).withOpacity(0.4),
+                          blurRadius: 30,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    child: isWide
+                        ? Row(
+                            children: [
+                              _buildAvatar(initial, 56),
+                              const SizedBox(width: 28),
+                              Expanded(child: _buildUserInfo(name, email, role)),
+                            ],
+                          )
+                        : Column(
+                            children: [
+                              _buildAvatar(initial, 48),
+                              const SizedBox(height: 20),
+                              _buildUserInfo(name, email, role),
+                            ],
+                          ),
                   ),
+                  const SizedBox(height: 28),
+                  // Acciones
+                  _buildActionCard(
+                    icon: Icons.settings_outlined,
+                    title: 'Configuración de cuenta',
+                    subtitle: 'Cambia tu nombre o contraseña',
+                    color: AppColors.yaviracBlueLight,
+                    onTap: () => _showConfigDialog(context),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildActionCard(
+                    icon: Icons.help_outline_rounded,
+                    title: 'Ayuda y soporte',
+                    subtitle: 'Envía una solicitud al equipo',
+                    color: AppColors.yaviracOrange,
+                    onTap: () => _showHelpDialog(context),
+                  ),
+                  if (_canUpload(role)) ..._buildUploadedBooksSection(),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  bool _canUpload(String role) {
+    final r = role.toLowerCase();
+    return r == 'profesor' || r == 'bibliotecario' || r == 'admin' || r == 'administrador';
+  }
+
+  List<Widget> _buildUploadedBooksSection() {
+    return [
+      const SizedBox(height: 28),
+      Row(
+        children: [
+          Container(
+            width: 4,
+            height: 20,
+            decoration: BoxDecoration(
+              color: AppColors.yaviracOrange,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Libros que he subido',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      FutureBuilder<List<Map<String, dynamic>>>(
+        future: _loadMyBooks(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            );
+          }
+          final books = snapshot.data ?? [];
+          if (books.isEmpty) {
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.cloud_upload_outlined, size: 48, color: Colors.white.withOpacity(0.3)),
+                  const SizedBox(height: 12),
                   Text(
-                    userData['email']!,
-                    style: OptimizedTheme.bodyTextSmall,
+                    'Aún no has subido ningún libro',
+                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
                   ),
                 ],
-              );
-            },
+              ),
+            );
+          }
+          return Column(
+            children: [
+              // Contador
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.yaviracOrange.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.yaviracOrange.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    '${books.length} libro${books.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: AppColors.yaviracOrange,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cols = constraints.maxWidth > 500 ? 4 : 2;
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: books.length,
+                    itemBuilder: (context, index) => _buildMyBookCard(context, books[index]),
+                  );
+                },
+              ),
+            ],
+          );
+        },
+      ),
+    ];
+  }
+
+  Future<List<Map<String, dynamic>>> _loadMyBooks() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    try {
+      final response = await Supabase.instance.client
+          .from('books')
+          .select()
+          .eq('created_by', user.id)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Widget _buildMyBookCard(BuildContext context, Map<String, dynamic> book) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Portada con botones superpuestos
+          Expanded(
+            flex: 5,
+            child: Stack(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => BookDetailScreen(book: book)),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    child: book['cover_url'] != null
+                        ? Image.network(
+                            book['cover_url'],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            errorBuilder: (_, __, ___) => _bookPlaceholder(),
+                          )
+                        : _bookPlaceholder(),
+                  ),
+                ),
+                // Botones editar/eliminar
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _iconBtn(
+                        Icons.edit_rounded,
+                        AppColors.yaviracBlueLight,
+                        () => _showEditDialog(context, book),
+                      ),
+                      const SizedBox(width: 4),
+                      _iconBtn(
+                        Icons.delete_rounded,
+                        Colors.red,
+                        () => OptimizedModals.showConfirmModal(
+                          context,
+                          title: 'Eliminar libro',
+                          message: '¿Seguro que deseas eliminar "${book['title']}"? Esta acción no se puede deshacer.',
+                          confirmText: 'Eliminar',
+                          onConfirm: () => _deleteBook(context, book['id']),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 32),
-          _buildProfileTile(Icons.history, 'Historial de lectura'),
-          _buildProfileTile(Icons.settings, 'Configuración', onTap: () => _showConfigDialog(context)),
-          _buildProfileTile(Icons.help, 'Ayuda', onTap: () => _showHelpDialog(context)),
+          // Info
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    book['title'] ?? 'Sin título',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    book['author'] ?? '',
+                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, color: Colors.white, size: 15),
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context, Map<String, dynamic> book) {
+    final titleCtrl = TextEditingController(text: book['title']);
+    final authorCtrl = TextEditingController(text: book['author']);
+    final descCtrl = TextEditingController(text: book['description'] ?? '');
+    final coverCtrl = TextEditingController(text: book['cover_url'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Editar libro', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _editField(titleCtrl, 'Título', Icons.title),
+                const SizedBox(height: 12),
+                _editField(authorCtrl, 'Autor', Icons.person_outline),
+                const SizedBox(height: 12),
+                _editField(descCtrl, 'Descripción', Icons.description_outlined, maxLines: 3),
+                const SizedBox(height: 12),
+                _editField(coverCtrl, 'URL de portada', Icons.image_outlined),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.yaviracOrange,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _updateBook(context, book['id'], {
+                'title': titleCtrl.text,
+                'author': authorCtrl.text,
+                'description': descCtrl.text.isEmpty ? null : descCtrl.text,
+                'cover_url': coverCtrl.text.isEmpty ? null : coverCtrl.text,
+              });
+            },
+            child: const Text('Guardar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _editField(TextEditingController ctrl, String label, IconData icon, {int maxLines = 1}) {
+    return TextField(
+      controller: ctrl,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+        prefixIcon: Icon(icon, color: AppColors.yaviracOrange, size: 18),
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: AppColors.yaviracOrange),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+    );
+  }
+
+  Future<void> _updateBook(BuildContext context, String id, Map<String, dynamic> data) async {
+    try {
+      await Supabase.instance.client.from('books').update(data).eq('id', id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Libro actualizado'), backgroundColor: Colors.green),
+        );
+        setState(() {});
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteBook(BuildContext context, String id) async {
+    try {
+      await Supabase.instance.client.from('books').delete().eq('id', id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('🗑️ Libro eliminado'), backgroundColor: Colors.orange),
+        );
+        setState(() {});
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Widget _bookPlaceholder() {
+    return Container(
+      color: AppColors.yaviracBlue.withOpacity(0.3),
+      child: const Center(
+        child: Icon(Icons.menu_book_rounded, size: 36, color: Colors.white38),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String initial, double radius) {
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withOpacity(0.2),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 3),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: radius * 0.75,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserInfo(String name, String email, String role) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          email,
+          style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.4)),
+          ),
+          child: Text(
+            role.toUpperCase(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.4)),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1224,41 +1745,6 @@ class _ProfileTabState extends State<_ProfileTab> {
     }
   }
 
-  Widget _buildProfileTile(IconData icon, String title, {VoidCallback? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: GlassmorphicContainer(
-        width: double.infinity,
-        height: 70,
-        borderRadius: 12,
-        blur: 10,
-        alignment: Alignment.center,
-        border: 0,
-        linearGradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withOpacity(0.1),
-            Colors.white.withOpacity(0.05),
-          ],
-        ),
-        borderGradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withOpacity(0.2),
-            Colors.white.withOpacity(0.1),
-          ],
-        ),
-        child: ListTile(
-          leading: Icon(icon, color: Colors.white70),
-          title: Text(title, style: OptimizedTheme.bodyText),
-          trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white54),
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
 }
 
 class _SearchResultsTab extends StatelessWidget {
