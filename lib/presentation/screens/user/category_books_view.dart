@@ -77,8 +77,8 @@ class CategoryBooksView extends StatelessWidget {
               return GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: MediaQuery.of(context).size.width > 900 ? 6 : 3,
                   childAspectRatio: 0.7,
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,

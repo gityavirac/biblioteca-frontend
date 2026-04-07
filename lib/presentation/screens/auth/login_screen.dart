@@ -91,10 +91,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } else {
+    } else if (mounted) {
+      final errorMsg = _authService.lastError == 'USUARIO_DESACTIVADO'
+          ? 'Usuario desactivado. Solicita activación al administrador.'
+          : 'Credenciales incorrectas';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Credenciales incorrectas', style: GoogleFonts.outfit()),
+          content: Text(errorMsg, style: GoogleFonts.outfit()),
           backgroundColor: Colors.redAccent.withOpacity(0.8),
           behavior: SnackBarBehavior.floating,
         ),

@@ -165,7 +165,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir archivo si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedFile != null) {
         try {
-          final fileName = '${DateTime.now().millisecondsSinceEpoch}_${_titleController.text.replaceAll(' ', '_')}.$_selectedFormat';
+          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$_selectedFormat';
           
           print('🔍 DEBUG: Intentando subir archivo...');
           print('🔍 DEBUG: Bucket name: Libros_digitales');
@@ -208,15 +208,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir portada si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedCover != null) {
         try {
-          final safeName = _titleController.text
-              .replaceAll(RegExp(r'[áàäâã]'), 'a')
-              .replaceAll(RegExp(r'[éèëê]'), 'e')
-              .replaceAll(RegExp(r'[íìïî]'), 'i')
-              .replaceAll(RegExp(r'[óòöôõ]'), 'o')
-              .replaceAll(RegExp(r'[úùüû]'), 'u')
-              .replaceAll(RegExp(r'[ñ]'), 'n')
-              .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
-          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_$safeName.jpg';
+          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
           
           if (_selectedCover!.bytes != null) {
             await Supabase.instance.client.storage

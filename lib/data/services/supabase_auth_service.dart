@@ -6,8 +6,9 @@ import 'enum_converter.dart';
 class SupabaseAuthService {
   final _supabase = Supabase.instance.client;
   
+  String? lastError;
   app_user.User? _currentUser;
-  
+
   app_user.User? get currentUser => _currentUser;
   bool get isLoggedIn => _currentUser != null;
   bool get isAdmin => _currentUser?.isAdmin ?? false;
@@ -92,6 +93,13 @@ class SupabaseAuthService {
               .select()
               .eq('id', response.user!.id)
               .single();
+
+          // Verificar si el usuario está desactivado
+          if (userData['is_active'] == false) {
+            await _supabase.auth.signOut();
+            lastError = 'USUARIO_DESACTIVADO';
+            return false;
+          }
 
           _currentUser = app_user.User(
             id: response.user!.id,

@@ -13,8 +13,11 @@ class UsersManagementScreen extends StatefulWidget {
 
 class _UsersManagementScreenState extends State<UsersManagementScreen> {
   List<Map<String, dynamic>> users = [];
+  List<Map<String, dynamic>> _filteredUsers = [];
   bool isLoading = true;
   String? error;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -36,6 +39,7 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
       
       setState(() {
         users = List<Map<String, dynamic>>.from(response);
+        _filteredUsers = users;
         isLoading = false;
       });
       
@@ -103,6 +107,8 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
   void _showEditUserDialog(String userId, String currentName, String currentEmail, String currentRole) {
     final nameController = TextEditingController(text: currentName);
     final passwordController = TextEditingController();
+    final user = users.firstWhere((u) => u['id'].toString() == userId);
+    final isActive = user['is_active'] != false;
     
     showDialog(
       context: context,
@@ -149,6 +155,21 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isActive ? Colors.orange : Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _toggleUserActive(userId, isActive);
+                  },
+                  child: Text(isActive ? 'Desactivar Usuario' : 'Activar Usuario', style: GoogleFonts.outfit()),
+                ),
+              ),
+              const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -235,6 +256,41 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
     }
   }
 
+  void _filterUsers(String query) {
+    setState(() {
+      _searchQuery = query;
+      if (query.isEmpty) {
+        _filteredUsers = users;
+      } else {
+        _filteredUsers = users.where((user) {
+          final name = user['name']?.toString().toLowerCase() ?? '';
+          final email = user['email']?.toString().toLowerCase() ?? '';
+          return name.contains(query.toLowerCase()) || email.contains(query.toLowerCase());
+        }).toList();
+      }
+    });
+  }
+
+  Future<void> _toggleUserActive(String userId, bool currentStatus) async {
+    try {
+      await Supabase.instance.client
+          .from('users')
+          .update({'is_active': !currentStatus})
+          .eq('id', userId);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(!currentStatus ? 'Usuario activado' : 'Usuario desactivado', style: GoogleFonts.outfit()),
+          backgroundColor: !currentStatus ? Colors.green : Colors.orange,
+        ),
+      );
+      _loadUsers();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   void _showDeleteConfirmDialog(String userId, String userName) {
     showDialog(
       context: context,
@@ -300,10 +356,21 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
 
   Future<void> _deleteUser(String userId) async {
     try {
+      // Desvincular libros creados por el usuario
+      await Supabase.instance.client
+          .from('books')
+          .update({'created_by': null})
+          .eq('created_by', userId);
+
+      // Eliminar de public.users
       await Supabase.instance.client
           .from('users')
           .delete()
           .eq('id', userId);
+
+      // Eliminar de auth.users via RPC
+      await Supabase.instance.client
+          .rpc('delete_user_by_id', params: {'user_id': userId});
       
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -399,7 +466,7 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Total: ${users.length} usuarios',
+                    'Total: ${_filteredUsers.length} usuarios',
                     style: GoogleFonts.outfit(fontSize: 18, color: Colors.white70),
                   ),
                   Text(
@@ -409,33 +476,58 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+              TextField(
+                controller: _searchController,
+                style: GoogleFonts.outfit(color: Colors.white),
+                onChanged: _filterUsers,
+                decoration: InputDecoration(
+                  hintText: 'Buscar por nombre o email...',
+                  hintStyle: GoogleFonts.outfit(color: Colors.white38),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white54),
+                          onPressed: () {
+                            _searchController.clear();
+                            _filterUsers('');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.white.withOpacity(0.4)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                    : users.isEmpty
+                    : _filteredUsers.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.people_outline, size: 64, color: Colors.white54),
+                                const Icon(Icons.search_off, size: 64, color: Colors.white54),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'No hay usuarios registrados',
+                                  _searchQuery.isEmpty ? 'No hay usuarios registrados' : 'No se encontraron usuarios',
                                   style: GoogleFonts.outfit(fontSize: 18, color: Colors.white70),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Los usuarios aparecerán aquí cuando se registren',
-                                  style: GoogleFonts.outfit(color: Colors.white54),
                                 ),
                               ],
                             ),
                           )
                         : ListView.builder(
-                            itemCount: users.length,
+                            itemCount: _filteredUsers.length,
                             itemBuilder: (context, index) {
-                              final user = users[index];
+                              final user = _filteredUsers[index];
                               final role = user['role']?.toString() ?? 'lector';
                               
                               return Padding(

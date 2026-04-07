@@ -54,6 +54,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    if (!_emailController.text.trim().endsWith('@yavirac.edu.ec')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Solo se permiten correos @yavirac.edu.ec', style: OptimizedTheme.bodyText),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     
     final success = await _authService.register(

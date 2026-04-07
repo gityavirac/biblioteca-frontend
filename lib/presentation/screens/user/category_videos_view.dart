@@ -76,8 +76,8 @@ class CategoryVideosView extends StatelessWidget {
               return GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: MediaQuery.of(context).size.width > 900 ? 4 : 2,
                   childAspectRatio: 1.4,
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,

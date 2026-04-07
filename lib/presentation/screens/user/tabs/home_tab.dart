@@ -1,18 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/optimized_theme.dart';
 import '../../../../data/services/cache_service.dart';
 import '../../../widgets/common_widgets.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends StatefulWidget {
   final String searchQuery;
   
   const HomeTab({super.key, this.searchQuery = ''});
 
   @override
+  State<HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<HomeTab> {
+  String? _showAllTitle;
+  bool _showAllIsVideo = false;
+
+  @override
   Widget build(BuildContext context) {
+    if (_showAllTitle != null) {
+      return _AllContentView(
+        title: _showAllTitle!,
+        isVideo: _showAllIsVideo,
+        onBack: () => setState(() => _showAllTitle = null),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -126,27 +143,32 @@ class HomeTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.yaviracOrange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.trending_up,
-                    color: Colors.white,
-                    size: 20,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.yaviracOrange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.trending_up, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Top 10 Más Leídos',
+                      style: OptimizedTheme.heading3.copyWith(fontSize: 20, fontWeight: FontWeight.w600, color: Colors.white),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  'Top 10 Más Leídos',
-                  style: OptimizedTheme.heading3.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _showAllTitle = 'Top 10 Más Leídos';
+                    _showAllIsVideo = false;
+                  }),
+                  icon: const Icon(Icons.grid_view, color: Colors.white70, size: 16),
+                  label: const Text('Ver todos', style: TextStyle(color: Colors.white70, fontSize: 13)),
                 ),
               ],
             ),
@@ -154,7 +176,7 @@ class HomeTab extends StatelessWidget {
             Expanded(
               child: HorizontalBookList(
                 future: DataService.getTopBooks(),
-                searchQuery: searchQuery,
+                searchQuery: widget.searchQuery,
               ),
             ),
           ],
@@ -167,17 +189,123 @@ class HomeTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
+            ),
+            TextButton.icon(
+              onPressed: () => setState(() {
+                _showAllTitle = title;
+                _showAllIsVideo = isVideo;
+              }),
+              icon: const Icon(Icons.grid_view, color: Colors.white70, size: 16),
+              label: const Text('Ver todos', style: TextStyle(color: Colors.white70, fontSize: 13)),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         HorizontalBookList(
           future: future,
-          searchQuery: searchQuery,
+          searchQuery: widget.searchQuery,
           isVideoList: isVideo,
         ),
       ],
+    );
+  }
+}
+
+class _AllContentView extends StatelessWidget {
+  final String title;
+  final bool isVideo;
+  final VoidCallback onBack;
+
+  const _AllContentView({
+    required this.title,
+    required this.isVideo,
+    required this.onBack,
+  });
+
+  Future<List<Map<String, dynamic>>> _loadAll() async {
+    try {
+      if (isVideo) {
+        return await Supabase.instance.client
+            .from('videos')
+            .select()
+            .order('created_at', ascending: false);
+      } else {
+        return await Supabase.instance.client
+            .from('books')
+            .select()
+            .order('created_at', ascending: false);
+      }
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: onBack,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text('Volver', style: OptimizedTheme.bodyText),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(title, style: OptimizedTheme.heading3.copyWith(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _loadAll(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('No hay contenido disponible', style: OptimizedTheme.bodyTextSmall));
+              }
+              final items = snapshot.data!;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: MediaQuery.of(context).size.width > 900
+                      ? (isVideo ? 4 : 6)
+                      : (isVideo ? 2 : 3),
+                  childAspectRatio: isVideo ? 1.4 : 0.7,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return isVideo
+                      ? VideoCard(video: items[index])
+                      : BookCard(book: items[index]);
+                },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

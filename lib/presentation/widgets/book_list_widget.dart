@@ -682,35 +682,57 @@ class _BookListWidgetState extends State<BookListWidget> {
                   print('📝 Portada seleccionada: ${selectedCover?.name}');
                   print('📝 URL de portada: ${coverUrlController.text}');
                   
+                  String? finalFileUrl;
+                  if (useFileUpload && selectedFile != null) {
+                    try {
+                      final ext = selectedFileName?.split('.').last ?? 'pdf';
+                      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$ext';
+                      await Supabase.instance.client.storage
+                          .from('Libros_digitales')
+                          .uploadBinary(fileName, selectedFile!);
+                      finalFileUrl = Supabase.instance.client.storage
+                          .from('Libros_digitales')
+                          .getPublicUrl(fileName);
+                    } catch (e) {
+                      print('❌ Error subiendo archivo: $e');
+                      finalFileUrl = book['file_url']; // si falla, mantener el anterior
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error subiendo archivo: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                        );
+                      }
+                      return;
+                    }
+                  } else if (!useFileUpload && fileUrlController.text.isNotEmpty) {
+                    finalFileUrl = fileUrlController.text;
+                  } else {
+                    finalFileUrl = book['file_url']; // mantener el anterior
+                  }
+
                   String? finalCoverUrl;
                   
                   // Subir portada si se seleccionó archivo
                   if (useCoverUpload && selectedCover != null) {
                     print('📝 Subiendo nueva portada...');
                     try {
-                      final safeName = titleController.text
-                          .replaceAll(RegExp(r'[áàäâã]'), 'a')
-                          .replaceAll(RegExp(r'[éèëê]'), 'e')
-                          .replaceAll(RegExp(r'[íìïî]'), 'i')
-                          .replaceAll(RegExp(r'[óòöôõ]'), 'o')
-                          .replaceAll(RegExp(r'[úùüû]'), 'u')
-                          .replaceAll(RegExp(r'[ñ]'), 'n')
-                          .replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '_');
-                      final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_$safeName.jpg';
-                      
+                      final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
                       if (selectedCover!.bytes != null) {
                         await Supabase.instance.client.storage
                             .from('Libros_digitales')
                             .uploadBinary(coverName, selectedCover!.bytes!);
-                        
                         finalCoverUrl = Supabase.instance.client.storage
                             .from('Libros_digitales')
                             .getPublicUrl(coverName);
-                        
-                        print('📝 Nueva URL de portada: $finalCoverUrl');
                       }
                     } catch (storageError) {
                       print('❌ Error subiendo portada: $storageError');
+                      finalCoverUrl = book['cover_url']; // si falla, mantener la anterior
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error subiendo portada: $storageError', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                        );
+                      }
+                      return;
                     }
                   } else if (!useCoverUpload && coverUrlController.text.isNotEmpty) {
                     finalCoverUrl = coverUrlController.text;
@@ -724,7 +746,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                     'title': titleController.text,
                     'author': authorController.text,
                     'description': descriptionController.text.isEmpty ? null : descriptionController.text,
-                    'file_url': fileUrlController.text,
+                    'file_url': finalFileUrl,
                     'cover_url': finalCoverUrl,
                     'isbn': isbnController.text.isEmpty ? null : isbnController.text,
                     'year': yearController.text.isEmpty ? null : int.tryParse(yearController.text),
@@ -743,29 +765,12 @@ class _BookListWidgetState extends State<BookListWidget> {
                   
                   Navigator.pop(context);
                   print('🔄 Llamando onRefresh...');
-                  // Forzar limpieza de caché y refresh
+                  await OptimizedCacheService.instance.remove('top_books');
+                  await OptimizedCacheService.instance.remove('recent_books');
+                  OptimizedCacheService.instance.clearMemory();
                   Future.microtask(() {
                     widget.onRefresh();
-                    // Segundo refresh después de un delay
-                    Future.delayed(const Duration(milliseconds: 500), () {
-                      widget.onRefresh();
-                    });
                   });
-                  print('🔄 onRefresh completado');
-                  
-                  // Forzar rebuild del widget padre
-                  if (context.mounted) {
-                    print('🔄 Forzando rebuild...');
-                    // Limpiar caché si existe
-                    try {
-                      print('🗑️ Limpiando caché...');
-                      // Simplemente hacer refresh sin limpiar caché
-                      await Future.delayed(const Duration(milliseconds: 100));
-                      widget.onRefresh();
-                    } catch (e) {
-                      print('Error en segundo refresh: $e');
-                    }
-                  }
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Libro actualizado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
                   );
@@ -1016,15 +1021,16 @@ class _BookListWidgetState extends State<BookListWidget> {
                 print('🗑️ Rol del usuario: ${widget.userRole}');
                 print('🗑️ Creado por: ${book['created_by']}');
                 
-                // Hacer soft delete del libro (marcar como eliminado)
-                print('🗑️ Marcando libro como eliminado (soft delete)...');
                 final result = await Supabase.instance.client
                     .from('books')
-                    .update({'deleted_at': DateTime.now().toIso8601String()})
+                    .delete()
                     .eq('id', book['id']);
                     
                 print('✅ Resultado eliminación: $result');
                 
+                await OptimizedCacheService.instance.remove('top_books');
+                await OptimizedCacheService.instance.remove('recent_books');
+                OptimizedCacheService.instance.clearMemory();
                 widget.onRefresh();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
