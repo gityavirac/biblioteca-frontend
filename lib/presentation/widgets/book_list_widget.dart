@@ -1068,37 +1068,40 @@ class _BookListWidgetState extends State<BookListWidget> {
             onPressed: () async {
               Navigator.pop(context);
               try {
-                print('🗑️ === INTENTANDO ELIMINAR LIBRO ===');
-                print('🗑️ Libro ID: ${book['id']}');
-                print('🗑️ Título: ${book['title']}');
-                print('🗑️ Usuario actual: ${Supabase.instance.client.auth.currentUser?.id}');
-                print('🗑️ Rol del usuario: ${widget.userRole}');
-                print('🗑️ Creado por: ${book['created_by']}');
-                
-                final result = await Supabase.instance.client
-                    .from('book_stats')
-                    .delete()
-                    .eq('book_id', book['id']);
-                    
-                await Supabase.instance.client
-                    .from('favorites')
-                    .delete()
-                    .eq('book_id', book['id']);
+                final bookId = book['id'];
+                final fileUrl = book['file_url'] as String?;
+                final coverUrl = book['cover_url'] as String?;
 
-                await Supabase.instance.client
-                    .from('books')
-                    .delete()
-                    .eq('id', book['id']);
-                    
-                print('✅ Resultado eliminación: $result');
-                
+                // 1. Eliminar archivos del storage
+                if (fileUrl != null && fileUrl.contains('Libros_digitales')) {
+                  try {
+                    final fileName = Uri.parse(fileUrl).pathSegments.last;
+                    await Supabase.instance.client.storage.from('Libros_digitales').remove([fileName]);
+                  } catch (_) {}
+                }
+                if (coverUrl != null && coverUrl.contains('Libros_digitales')) {
+                  try {
+                    final coverName = Uri.parse(coverUrl).pathSegments.last;
+                    await Supabase.instance.client.storage.from('Libros_digitales').remove([coverName]);
+                  } catch (_) {}
+                }
+
+                // 2. Eliminar tablas relacionadas en orden correcto
+                await Supabase.instance.client.from('book_opens_history').delete().eq('book_id', bookId);
+                await Supabase.instance.client.from('reading_history').delete().eq('book_id', bookId);
+                await Supabase.instance.client.from('book_stats').delete().eq('book_id', bookId);
+                await Supabase.instance.client.from('favorites').delete().eq('book_id', bookId);
+
+                // 3. Eliminar el libro
+                await Supabase.instance.client.from('books').delete().eq('id', bookId);
+
                 await OptimizedCacheService.instance.remove('top_books');
                 await OptimizedCacheService.instance.remove('recent_books');
                 OptimizedCacheService.instance.clearMemory();
                 widget.onRefresh();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Libro eliminado correctamente', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
+                    SnackBar(content: Text('Libro eliminado completamente', style: GoogleFonts.outfit()), backgroundColor: Colors.orange),
                   );
                 }
               } catch (e) {
@@ -1118,3 +1121,210 @@ class _BookListWidgetState extends State<BookListWidget> {
     );
   }
 }
+
+
+
+void showBookEditDialog({
+  required BuildContext context,
+  required Map<String, dynamic> book,
+  required VoidCallback onRefresh,
+}) {
+  final titleController = TextEditingController(text: book['title'] ?? '');
+  final authorController = TextEditingController(text: book['author'] ?? '');
+  final descriptionController = TextEditingController(text: book['description'] ?? '');
+  final coverUrlController = TextEditingController(text: book['cover_url'] ?? '');
+  final fileUrlController = TextEditingController(text: book['file_url'] ?? '');
+  final isbnController = TextEditingController(text: book['isbn'] ?? '');
+  final yearController = TextEditingController(text: book['year']?.toString() ?? '');
+  final locationController = TextEditingController(text: book['physical_location'] ?? '');
+  final codigoFisicoController = TextEditingController(text: book['codigo_fisico'] ?? '');
+
+  String selectedFormat = book['format'] ?? 'pdf';
+  String selectedCategory = book['category'] ?? 'General';
+  String selectedSub = book['subcategory'] ?? '';
+  bool isPhysical = book['is_physical'] ?? false;
+  bool useCoverUpload = false;
+  PlatformFile? selectedCover;
+
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setS) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: Text('Editar Libro', style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: SizedBox(
+          width: 500,
+          height: 600,
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _editField(titleController, 'Título', Icons.title),
+                const SizedBox(height: 12),
+                _editField(authorController, 'Autor', Icons.person_outline),
+                const SizedBox(height: 12),
+                _editField(descriptionController, 'Descripción', Icons.description_outlined, maxLines: 3),
+                const SizedBox(height: 12),
+                _editField(fileUrlController, 'URL del archivo', Icons.link),
+                const SizedBox(height: 12),
+                // Portada
+                Text('Portada', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Expanded(child: RadioListTile<bool>(
+                    title: Text('URL', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                    value: false, groupValue: useCoverUpload,
+                    onChanged: (v) => setS(() { useCoverUpload = false; selectedCover = null; }),
+                    activeColor: Colors.orange,
+                  )),
+                  Expanded(child: RadioListTile<bool>(
+                    title: Text('Subir imagen', style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12)),
+                    value: true, groupValue: useCoverUpload,
+                    onChanged: (v) async {
+                      final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+                      if (result != null) setS(() { useCoverUpload = true; selectedCover = result.files.single; });
+                    },
+                    activeColor: Colors.orange,
+                  )),
+                ]),
+                if (!useCoverUpload) _editField(coverUrlController, 'URL de portada', Icons.image_outlined)
+                else if (selectedCover != null) Text('✅ ${selectedCover!.name}', style: GoogleFonts.outfit(color: Colors.green)),
+                const SizedBox(height: 12),
+                _editField(isbnController, 'ISBN', Icons.qr_code),
+                const SizedBox(height: 12),
+                _editField(yearController, 'Año', Icons.calendar_today, keyboardType: TextInputType.number),
+                const SizedBox(height: 12),
+                // Categoría y subcategoría
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _loadCatsAndSubs(),
+                  builder: (ctx, snap) {
+                    if (!snap.hasData) return const CircularProgressIndicator(color: Colors.white);
+                    final catMap = snap.data!.first as Map<String, List<String>>;
+                    if (!catMap.containsKey(selectedCategory)) selectedCategory = catMap.keys.first;
+                    final subs = catMap[selectedCategory] ?? ['General'];
+                    if (!subs.contains(selectedSub)) selectedSub = subs.first;
+                    return StatefulBuilder(
+                      builder: (ctx, setSub) => Column(children: [
+                        DropdownButtonFormField<String>(
+                          value: selectedCategory,
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: GoogleFonts.outfit(color: Colors.white),
+                          decoration: _dropDeco('Categoría'),
+                          items: catMap.keys.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                          onChanged: (v) { setS(() { selectedCategory = v!; selectedSub = (catMap[v] ?? ['General']).first; }); setSub(() {}); },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: selectedSub,
+                          dropdownColor: const Color(0xFF1E293B),
+                          style: GoogleFonts.outfit(color: Colors.white),
+                          decoration: _dropDeco('Subcategoría'),
+                          items: subs.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                          onChanged: (v) { setS(() => selectedSub = v!); setSub(() {}); },
+                        ),
+                      ]),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  title: Text('¿Es libro físico?', style: GoogleFonts.outfit(color: Colors.white70)),
+                  value: isPhysical,
+                  onChanged: (v) => setS(() => isPhysical = v ?? false),
+                  activeColor: Colors.orange,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                if (isPhysical) ...[
+                  _editField(codigoFisicoController, 'Código Físico', Icons.qr_code_2),
+                  const SizedBox(height: 12),
+                  _editField(locationController, 'Ubicación', Icons.location_on),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Cancelar', style: GoogleFonts.outfit(color: Colors.white54))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            onPressed: () async {
+              try {
+                String? finalCoverUrl;
+                if (useCoverUpload && selectedCover?.bytes != null) {
+                  final name = '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+                  await Supabase.instance.client.storage.from('Libros_digitales').uploadBinary(name, selectedCover!.bytes!);
+                  finalCoverUrl = Supabase.instance.client.storage.from('Libros_digitales').getPublicUrl(name);
+                } else {
+                  finalCoverUrl = coverUrlController.text.isEmpty ? book['cover_url'] : coverUrlController.text;
+                }
+                await Supabase.instance.client.from('books').update({
+                  'title': titleController.text,
+                  'author': authorController.text,
+                  'description': descriptionController.text.isEmpty ? null : descriptionController.text,
+                  'file_url': fileUrlController.text.isEmpty ? book['file_url'] : fileUrlController.text,
+                  'cover_url': finalCoverUrl,
+                  'isbn': isbnController.text.isEmpty ? null : isbnController.text,
+                  'year': yearController.text.isEmpty ? null : int.tryParse(yearController.text),
+                  'format': selectedFormat,
+                  'category': selectedCategory,
+                  'subcategory': selectedSub,
+                  'is_physical': isPhysical,
+                  'physical_location': isPhysical ? locationController.text : null,
+                  'codigo_fisico': isPhysical ? codigoFisicoController.text : null,
+                }).eq('id', book['id']);
+                Navigator.pop(ctx);
+                onRefresh();
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Libro actualizado', style: GoogleFonts.outfit()), backgroundColor: Colors.green),
+                );
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e', style: GoogleFonts.outfit()), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: Text('Guardar', style: GoogleFonts.outfit(color: Colors.white)),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<List<Map<String, dynamic>>> _loadCatsAndSubs() async {
+  final cats = await Supabase.instance.client.from('categories').select('id, name').eq('is_active', true).order('name');
+  final subs = await Supabase.instance.client.from('subcategories').select('name, category_id').eq('is_active', true).order('name');
+  final Map<String, List<String>> map = {};
+  for (final cat in cats) {
+    final catSubs = (subs as List).where((s) => s['category_id'] == cat['id']).map((s) => s['name'] as String).toList();
+    map[cat['name'] as String] = catSubs.isEmpty ? ['General'] : catSubs;
+  }
+  return [map];
+}
+
+Widget _editField(TextEditingController ctrl, String label, IconData icon, {int maxLines = 1, TextInputType? keyboardType}) {
+  return TextField(
+    controller: ctrl,
+    maxLines: maxLines,
+    keyboardType: keyboardType,
+    style: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
+    decoration: InputDecoration(
+      labelText: label,
+      labelStyle: GoogleFonts.outfit(color: Colors.white60, fontSize: 12),
+      prefixIcon: Icon(icon, color: Colors.orange, size: 18),
+      filled: true,
+      fillColor: Colors.black.withOpacity(0.3),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.orange)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    ),
+  );
+}
+
+InputDecoration _dropDeco(String label) => InputDecoration(
+  labelText: label,
+  labelStyle: GoogleFonts.outfit(color: Colors.white60, fontSize: 12),
+  filled: true,
+  fillColor: Colors.black.withOpacity(0.3),
+  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.orange)),
+);

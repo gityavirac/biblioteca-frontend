@@ -20,6 +20,7 @@ import 'tabs/home_tab.dart';
 import 'tabs/library_tab.dart';
 import 'tabs/videos_tab.dart';
 import '../admin/add_book_screen.dart';
+import '../../../presentation/widgets/book_list_widget.dart';
 import '../admin/add_video_screen.dart';
 import '../admin/add_physical_book_screen.dart';
 import '../admin/categories_management_screen.dart';
@@ -155,6 +156,8 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         return const _CategoriesManagementTab();
       case 10:
         return _PhysicalBooksTab(canEdit: _canEdit, userRole: _userRole);
+      case 11:
+        return const _AllBooksTab();
       default:
         return HomeTab(searchQuery: _searchQuery);
     }
@@ -393,6 +396,7 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         children: [
           _buildMenuItem(Icons.home, 'Inicio', 0),
           _buildMenuItem(Icons.library_books, 'Libros', 1),
+          _buildMenuItem(Icons.menu_book, 'Todos los Libros', 11),
           _buildMenuItem(Icons.location_on, 'Libros Físicos', 10),
           _buildMenuItem(Icons.video_library, 'Videos', 2),
           _buildMenuItem(Icons.favorite, 'Favoritos', 3),
@@ -1355,24 +1359,34 @@ class _ProfileTabState extends State<_ProfileTab> {
     }
   }
 
+  Future<void> _deleteStorageFile(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      // La URL tiene formato: .../object/public/BUCKET/filename
+      final segments = uri.pathSegments;
+      final publicIndex = segments.indexOf('public');
+      if (publicIndex == -1 || publicIndex + 2 >= segments.length) return;
+      final bucket = segments[publicIndex + 1];
+      final fileName = segments.sublist(publicIndex + 2).join('/');
+      await Supabase.instance.client.storage.from(bucket).remove([fileName]);
+    } catch (_) {}
+  }
+
   Future<void> _deleteBook(BuildContext context, String id) async {
     try {
-      // Eliminar dependencias antes del libro
-      await Supabase.instance.client.from('book_stats').delete().eq('book_id', id);
-      await Supabase.instance.client.from('favorites').delete().eq('book_id', id);
-      await Supabase.instance.client.from('books').delete().eq('id', id);
+      final d = await Supabase.instance.client.from('books').select('file_url, cover_url').eq('id', id).single();
+      final f = d['file_url'] as String?;
+      final c = d['cover_url'] as String?;
+      if (f != null && f.contains('/storage/')) await _deleteStorageFile(f);
+      if (c != null && c.contains('/storage/')) await _deleteStorageFile(c);
+      await Supabase.instance.client.rpc('delete_book_complete', params: {'p_book_id': id});
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🗑️ Libro eliminado'), backgroundColor: Colors.orange),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Libro eliminado completamente'), backgroundColor: Colors.orange));
         _reloadBooks();
       }
     } catch (e) {
-      print('❌ [DELETE] Error: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ Error al eliminar: $e'), backgroundColor: Colors.red),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al eliminar: $e'), backgroundColor: Colors.red));
       }
     }
   }
@@ -3133,6 +3147,226 @@ class _PhysicalBooksTab extends StatelessWidget {
                       ),
                     );
                   },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AllBooksTab extends StatefulWidget {
+  const _AllBooksTab();
+
+  @override
+  State<_AllBooksTab> createState() => _AllBooksTabState();
+}
+
+class _AllBooksTabState extends State<_AllBooksTab> {
+  final List<Map<String, dynamic>> _books = [];
+  bool _loading = true;
+  bool _loadingMore = false;
+  int _page = 0;
+  static const int _limit = 30;
+  bool _hasMore = true;
+  bool _canEdit = false;
+  int _totalBooks = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkRole();
+    _loadMore();
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        _loadMore();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkRole() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    final data = await Supabase.instance.client
+        .from('users').select('role').eq('id', user.id).single();
+    final role = data['role']?.toString().toLowerCase() ?? '';
+    if (mounted) setState(() => _canEdit = ['admin', 'administrador', 'profesor', 'bibliotecario'].contains(role));
+    // Cargar total
+    try {
+      final response = await Supabase.instance.client
+          .from('books')
+          .select('id');
+      if (mounted) setState(() => _totalBooks = (response as List).length);
+    } catch (_) {}
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('books')
+          .select()
+          .order('created_at', ascending: false)
+          .range(_page * _limit, (_page + 1) * _limit - 1);
+      setState(() {
+        _books.addAll(List<Map<String, dynamic>>.from(response));
+        _hasMore = response.length == _limit;
+        _page++;
+        _loading = false;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      setState(() { _loading = false; _loadingMore = false; });
+    }
+  }
+
+  Future<void> _deleteStorageFile(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      final publicIndex = segments.indexOf('public');
+      if (publicIndex == -1 || publicIndex + 2 >= segments.length) return;
+      final bucket = segments[publicIndex + 1];
+      final fileName = segments.sublist(publicIndex + 2).join('/');
+      await Supabase.instance.client.storage.from(bucket).remove([fileName]);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteBook(String id, Map<String, dynamic> book) async {
+    try {
+      final fileUrl = book['file_url'] as String?;
+      final coverUrl = book['cover_url'] as String?;
+      if (fileUrl != null && fileUrl.contains('/storage/')) await _deleteStorageFile(fileUrl);
+      if (coverUrl != null && coverUrl.contains('/storage/')) await _deleteStorageFile(coverUrl);
+      await Supabase.instance.client.rpc('delete_book_complete', params: {'p_book_id': id});
+      setState(() => _books.removeWhere((b) => b['id'] == id));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Libro eliminado completamente'), backgroundColor: Colors.orange),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showEditDialog(Map<String, dynamic> book) {
+    showBookEditDialog(
+      context: context,
+      book: book,
+      onRefresh: () => setState(() {
+        _page = 0;
+        _books.clear();
+        _hasMore = true;
+        _loadMore();
+      }),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Colors.white));
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Todos los Libros ($_totalBooks)', style: OptimizedTheme.heading2),
+          const SizedBox(height: 16),
+          Expanded(
+            child: GridView.builder(
+              controller: _scrollController,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.of(context).size.width > 900 ? 6 : 3,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              itemCount: _books.length + (_loadingMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _books.length) return const Center(child: CircularProgressIndicator(color: Colors.white));
+                final book = _books[index];
+                return GestureDetector(
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BookDetailScreen(book: book))),
+                  child: Card(
+                    color: Colors.white.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                child: book['cover_url'] != null
+                                    ? Image.network(book['cover_url'], fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                                        errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book, size: 30, color: Colors.white54)))
+                                    : const Center(child: Icon(Icons.book, size: 30, color: Colors.white54)),
+                              ),
+                              if (_canEdit)
+                                Positioned(
+                                  top: 4, right: 4,
+                                  child: PopupMenuButton<String>(
+                                    icon: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Icon(Icons.more_vert, color: Colors.white, size: 16),
+                                    ),
+                                    color: const Color(0xFF1E293B),
+                                    itemBuilder: (ctx) => [
+                                      const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Editar')])),
+                                      const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, size: 16, color: Colors.red), SizedBox(width: 8), Text('Eliminar', style: TextStyle(color: Colors.red))])),
+                                    ],
+                                    onSelected: (value) {
+                                      if (value == 'edit') _showEditDialog(book);
+                                      if (value == 'delete') showDialog(
+                                        context: context,
+                                        builder: (ctx) => AlertDialog(
+                                          backgroundColor: const Color(0xFF1E293B),
+                                          title: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                          content: Text('¿Eliminar "${book['title']}"?', style: const TextStyle(color: Colors.white70)),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                              onPressed: () { Navigator.pop(ctx); _deleteBook(book['id'], book); },
+                                              child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(book['title'] ?? 'Sin título', style: OptimizedTheme.caption.copyWith(fontSize: 11, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                              Text(book['author'] ?? '', style: OptimizedTheme.caption.copyWith(fontSize: 9, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
