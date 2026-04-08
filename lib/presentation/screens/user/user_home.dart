@@ -224,7 +224,12 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
         currentIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
         onTap: (index) {
           _cachedTabs.clear();
-          setState(() => _selectedIndex = index);
+          _searchController.clear();
+          _searchingNotifier.value = false;
+          setState(() {
+            _selectedIndex = index;
+            _searchQuery = '';
+          });
         },
         items: const [
           BottomNavigationBarItem(
@@ -701,9 +706,13 @@ class _UserHomeState extends State<UserHome> with LazyLoadingMixin, TickerProvid
               if (onTap != null) {
                 onTap();
               } else if (index >= 0) {
-                // Limpiar caché cuando cambia de tab
                 _cachedTabs.clear();
-                setState(() => _selectedIndex = index);
+                _searchController.clear();
+                _searchingNotifier.value = false;
+                setState(() {
+                  _selectedIndex = index;
+                  _searchQuery = '';
+                });
               }
             },
             borderRadius: BorderRadius.circular(16),
@@ -1347,10 +1356,11 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 
   Future<void> _deleteBook(BuildContext context, String id) async {
-    print('🗑️ [DELETE] Eliminando libro id=$id');
     try {
+      // Eliminar dependencias antes del libro
+      await Supabase.instance.client.from('book_stats').delete().eq('book_id', id);
+      await Supabase.instance.client.from('favorites').delete().eq('book_id', id);
       await Supabase.instance.client.from('books').delete().eq('id', id);
-      print('✅ [DELETE] Libro eliminado correctamente');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('🗑️ Libro eliminado'), backgroundColor: Colors.orange),
@@ -1811,61 +1821,63 @@ class _SearchResultsTab extends StatelessWidget {
     }
   }
 
+  /// Elimina tildes y normaliza el texto para búsqueda insensible a acentos
+  String _normalize(String text) {
+    const accents = {
+      'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+      'Á': 'a', 'É': 'e', 'Í': 'i', 'Ó': 'o', 'Ú': 'u',
+      'ü': 'u', 'Ü': 'u', 'ñ': 'n', 'Ñ': 'n',
+    };
+    return text.toLowerCase().split('').map((c) => accents[c] ?? c).join();
+  }
+
   Future<Map<String, List<Map<String, dynamic>>>> _searchContent() async {
     try {
-      print('🔍 Buscando: $searchQuery');
-      
-      // Buscar en libros
-      final booksResponse1 = await Supabase.instance.client
-          .from('books')
-          .select()
-          .ilike('title', '%$searchQuery%');
-      
-      final booksResponse2 = await Supabase.instance.client
-          .from('books')
-          .select()
-          .ilike('author', '%$searchQuery%');
-      
-      final booksResponse3 = await Supabase.instance.client
-          .from('books')
-          .select()
-          .ilike('category', '%$searchQuery%');
-      
-      // Buscar en videos
-      final videosResponse1 = await Supabase.instance.client
-          .from('videos')
-          .select()
-          .ilike('title', '%$searchQuery%');
-      
-      final videosResponse2 = await Supabase.instance.client
-          .from('videos')
-          .select()
-          .ilike('category', '%$searchQuery%');
-      
-      final videosResponse3 = await Supabase.instance.client
-          .from('videos')
-          .select()
-          .ilike('subcategory', '%$searchQuery%');
-      
-      // Combinar y eliminar duplicados
-      final allBooks = [...booksResponse1, ...booksResponse2, ...booksResponse3];
+      // Buscar con el query original Y sin tildes para cubrir ambos casos
+      final queries = {searchQuery, _normalize(searchQuery)}.toList();
+
       final uniqueBooks = <String, Map<String, dynamic>>{};
-      for (var book in allBooks) {
-        uniqueBooks[book['id']] = book;
-      }
-      
-      final allVideos = [...videosResponse1, ...videosResponse2, ...videosResponse3];
       final uniqueVideos = <String, Map<String, dynamic>>{};
-      for (var video in allVideos) {
-        uniqueVideos[video['id']] = video;
+
+      for (final q in queries) {
+        final pattern = '%$q%';
+
+        final results = await Future.wait([
+          Supabase.instance.client.from('books').select().ilike('title', pattern),
+          Supabase.instance.client.from('books').select().ilike('author', pattern),
+          Supabase.instance.client.from('books').select().ilike('category', pattern),
+          Supabase.instance.client.from('videos').select().ilike('title', pattern),
+          Supabase.instance.client.from('videos').select().ilike('category', pattern),
+          Supabase.instance.client.from('videos').select().ilike('subcategory', pattern),
+        ]);
+
+        for (final book in [...results[0], ...results[1], ...results[2]]) {
+          uniqueBooks[book['id']] = book;
+        }
+        for (final video in [...results[3], ...results[4], ...results[5]]) {
+          uniqueVideos[video['id']] = video;
+        }
       }
-      
-      print('✅ Total únicos - Libros: ${uniqueBooks.length}, Videos: ${uniqueVideos.length}');
-      
-      return {
-        'books': uniqueBooks.values.toList(),
-        'videos': uniqueVideos.values.toList(),
-      };
+
+      // Filtro adicional en cliente para cubrir tildes en datos almacenados
+      final normalizedQuery = _normalize(searchQuery);
+      final filteredBooks = uniqueBooks.values.where((b) {
+        return _normalize(b['title'] ?? '').contains(normalizedQuery) ||
+               _normalize(b['author'] ?? '').contains(normalizedQuery) ||
+               _normalize(b['category'] ?? '').contains(normalizedQuery);
+      }).toList();
+
+      final filteredVideos = uniqueVideos.values.where((v) {
+        return _normalize(v['title'] ?? '').contains(normalizedQuery) ||
+               _normalize(v['category'] ?? '').contains(normalizedQuery) ||
+               _normalize(v['subcategory'] ?? '').contains(normalizedQuery);
+      }).toList();
+
+      // Si el filtro cliente encontró más resultados, usarlos; si no, usar los de BD
+      final books = filteredBooks.isNotEmpty ? filteredBooks : uniqueBooks.values.toList();
+      final videos = filteredVideos.isNotEmpty ? filteredVideos : uniqueVideos.values.toList();
+
+      return {'books': books, 'videos': videos};
     } catch (e) {
       print('❌ Error en búsqueda: $e');
       return {'books': [], 'videos': []};

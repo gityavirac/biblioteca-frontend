@@ -44,14 +44,17 @@ class _LibraryTabState extends State<LibraryTab> {
     try {
       final response = await Supabase.instance.client
           .from('categories')
-          .select()
+          .select('name, subcategories(name)')
           .eq('is_active', true)
           .order('name');
       
       setState(() {
         categories = {};
-        for (var category in response) {
-          categories[category['name']] = ['General']; // Subcategoría por defecto
+        for (var cat in response) {
+          final subs = (cat['subcategories'] as List)
+              .map((s) => s['name'] as String)
+              .toList();
+          categories[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
         }
         _loadingCategories = false;
       });

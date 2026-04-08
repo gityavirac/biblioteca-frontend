@@ -184,21 +184,6 @@ class _UsersManagementScreenState extends State<UsersManagementScreen> {
                   child: Text('Cambiar Rol', style: GoogleFonts.outfit()),
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showDeleteConfirmDialog(userId, currentName);
-                  },
-                  child: Text('Eliminar Usuario', style: GoogleFonts.outfit()),
-                ),
-              ),
             ],
           ),
         ),

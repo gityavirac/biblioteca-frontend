@@ -20,17 +20,47 @@ class _AddVideoScreenState extends State<AddVideoScreen> {
   final _thumbnailController = TextEditingController();
   final _descriptionController = TextEditingController();
   
-  String _selectedCategory = 'Desarrollo de Software';
-  String _selectedSubcategory = 'Frontend';
+  String? _selectedCategory;
+  String? _selectedSubcategory;
   bool _isLoading = false;
+  Map<String, List<String>> _categories = {};
+  bool _loadingCategories = true;
 
-  final Map<String, List<String>> _categories = {
-    'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
-    'Marketing': ['Digital', 'Tradicional', 'Redes Sociales', 'SEO'],
-    'Guía Nacional de Turismo': ['Destinos', 'Hoteles', 'Restaurantes', 'Actividades'],
-    'Arte Culinaria': ['Cocina Nacional', 'Cocina Internacional', 'Repostería', 'Bebidas'],
-    'Idioma': ['Inglés', 'Francés', 'Alemán', 'Portugués'],
-  };
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final cats = await Supabase.instance.client
+          .from('categories')
+          .select('name, subcategories(name, is_active)')
+          .eq('is_active', true)
+          .order('name');
+
+      final Map<String, List<String>> map = {};
+      for (final cat in cats) {
+        final subs = (cat['subcategories'] as List)
+            .where((s) => s['is_active'] != false)
+            .map((s) => s['name'] as String)
+            .toList();
+        map[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
+      }
+
+      if (mounted) {
+        setState(() {
+          _categories = map;
+          _selectedCategory = map.keys.isNotEmpty ? map.keys.first : null;
+          _selectedSubcategory = map.values.isNotEmpty ? map.values.first.first : null;
+          _loadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
+  }
 
   String _extractYouTubeId(String url) {
     final regExp = RegExp(r'(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)');
@@ -295,26 +325,34 @@ class _AddVideoScreenState extends State<AddVideoScreen> {
   }
 
   Widget _buildCategorySection() {
+    if (_loadingCategories) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    final subcats = _selectedCategory != null
+        ? (_categories[_selectedCategory!] ?? ['General'])
+        : ['General'];
+    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory : subcats.first;
     return Row(
       children: [
         Expanded(
           child: _buildDropdown(
-            _selectedCategory,
+            _selectedCategory ?? '',
             'Categoría',
             _categories.keys.toList(),
             (value) => setState(() {
-              _selectedCategory = value!;
-              _selectedSubcategory = _categories[value]!.first;
+              _selectedCategory = value;
+              final newSubs = _categories[value] ?? ['General'];
+              _selectedSubcategory = newSubs.first;
             }),
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: _buildDropdown(
-            _selectedSubcategory,
+            validSub ?? subcats.first,
             'Subcategoría',
-            _categories[_selectedCategory]!,
-            (value) => setState(() => _selectedSubcategory = value!),
+            subcats,
+            (value) => setState(() => _selectedSubcategory = value),
           ),
         ),
       ],

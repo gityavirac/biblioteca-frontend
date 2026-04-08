@@ -31,18 +31,48 @@ class _AddBookScreenState extends State<AddBookScreen> {
   PlatformFile? _selectedCover;
   
   String _selectedFormat = 'pdf';
-  String _selectedCategory = 'Desarrollo de Software';
-  String _selectedSubcategory = 'Frontend';
+  String? _selectedCategory;
+  String? _selectedSubcategory;
   bool _isLoading = false;
   bool _isPhysical = false;
+  Map<String, List<String>> _categories = {};
+  bool _loadingCategories = true;
 
-  final Map<String, List<String>> _categories = {
-    'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
-    'Marketing': ['Digital', 'Tradicional', 'Redes Sociales', 'SEO'],
-    'Guía Nacional de Turismo': ['Destinos', 'Hoteles', 'Restaurantes', 'Actividades'],
-    'Arte Culinaria': ['Cocina Nacional', 'Cocina Internacional', 'Repostería', 'Bebidas'],
-    'Idioma': ['Inglés', 'Francés', 'Alemán', 'Portugués'],
-  };
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final cats = await Supabase.instance.client
+          .from('categories')
+          .select('name, subcategories(name, is_active)')
+          .eq('is_active', true)
+          .order('name');
+
+      final Map<String, List<String>> map = {};
+      for (final cat in cats) {
+        final subs = (cat['subcategories'] as List)
+            .where((s) => s['is_active'] != false)
+            .map((s) => s['name'] as String)
+            .toList();
+        map[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
+      }
+
+      if (mounted) {
+        setState(() {
+          _categories = map;
+          _selectedCategory = map.keys.isNotEmpty ? map.keys.first : null;
+          _selectedSubcategory = map.values.isNotEmpty ? map.values.first.first : null;
+          _loadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
+  }
 
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -255,7 +285,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
         'format': _selectedFormat,
         'category': _selectedCategory,
         'subcategory': _selectedSubcategory,
-        'categories': [_selectedCategory],
+        'categories': [if (_selectedCategory != null) _selectedCategory!],
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': _isPhysical || (_selectedCategory == 'Libros Físicos'),
@@ -580,30 +610,36 @@ class _AddBookScreenState extends State<AddBookScreen> {
   }
 
   Widget _buildCategorySection() {
+    if (_loadingCategories) {
+      return const Center(child: CircularProgressIndicator(color: Colors.white));
+    }
+    final subcats = _selectedCategory != null
+        ? (_categories[_selectedCategory!] ?? ['General'])
+        : ['General'];
+    // Asegurar que _selectedSubcategory sea válido para la lista actual
+    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory : subcats.first;
     return Row(
       children: [
         Expanded(
           child: _buildDropdown(
-            _selectedCategory,
+            _selectedCategory ?? '',
             'Categoría',
             _categories.keys.toList(),
             (value) => setState(() {
-              _selectedCategory = value!;
-              _selectedSubcategory = _categories[value]!.first;
-              // Si selecciona "Libros Físicos", activar automáticamente _isPhysical
-              if (value == 'Libros Físicos') {
-                _isPhysical = true;
-              }
+              _selectedCategory = value;
+              final newSubs = _categories[value] ?? ['General'];
+              _selectedSubcategory = newSubs.first;
+              if (value == 'Libros Físicos') _isPhysical = true;
             }),
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
           child: _buildDropdown(
-            _selectedSubcategory,
+            validSub ?? subcats.first,
             'Subcategoría',
-            _categories[_selectedCategory]!,
-            (value) => setState(() => _selectedSubcategory = value!),
+            subcats,
+            (value) => setState(() => _selectedSubcategory = value),
           ),
         ),
       ],
