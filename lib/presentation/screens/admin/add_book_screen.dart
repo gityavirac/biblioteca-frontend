@@ -165,7 +165,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir archivo si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedFile != null) {
         try {
-          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$_selectedFormat';
+          final fileName = '${DateTime.now().millisecondsSinceEpoch}.$_selectedFormat'
+              .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
           
           print('🔍 DEBUG: Intentando subir archivo...');
           print('🔍 DEBUG: Bucket name: Libros_digitales');
@@ -176,7 +177,14 @@ class _AddBookScreenState extends State<AddBookScreen> {
             print('🔍 DEBUG: Iniciando upload...');
             await Supabase.instance.client.storage
                 .from('Libros_digitales')
-                .uploadBinary(fileName, _selectedFile!.bytes!);
+                .uploadBinary(
+                  fileName,
+                  _selectedFile!.bytes!,
+                  fileOptions: FileOptions(
+                    contentType: _selectedFormat == 'epub' ? 'application/epub+zip' : 'application/pdf',
+                    upsert: false,
+                  ),
+                );
             
             print('🔍 DEBUG: Upload exitoso, obteniendo URL...');
             fileUrl = Supabase.instance.client.storage
@@ -208,12 +216,20 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir portada si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedCover != null) {
         try {
-          final coverName = 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final coverName = 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg'
+              .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
           
           if (_selectedCover!.bytes != null) {
             await Supabase.instance.client.storage
                 .from('Libros_digitales')
-                .uploadBinary(coverName, _selectedCover!.bytes!);
+                .uploadBinary(
+                  coverName,
+                  _selectedCover!.bytes!,
+                  fileOptions: const FileOptions(
+                    contentType: 'image/jpeg',
+                    upsert: false,
+                  ),
+                );
             
             coverUrl = Supabase.instance.client.storage
                 .from('Libros_digitales')
