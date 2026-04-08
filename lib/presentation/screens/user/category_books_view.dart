@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'book_detail_screen.dart';
 
-class CategoryBooksView extends StatelessWidget {
+class CategoryBooksView extends StatefulWidget {
   final String category;
   final VoidCallback onBack;
   final bool canEdit;
@@ -17,14 +17,61 @@ class CategoryBooksView extends StatelessWidget {
     required this.userRole,
   });
 
-  Future<List<Map<String, dynamic>>> _loadBooksByCategory() async {
+  @override
+  State<CategoryBooksView> createState() => _CategoryBooksViewState();
+}
+
+class _CategoryBooksViewState extends State<CategoryBooksView> {
+  List<String> _subcategories = [];
+  String? _selectedSubcategory; // null = todas
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSubcategories();
+  }
+
+  Future<void> _loadSubcategories() async {
     try {
-      final response = await Supabase.instance.client
+      final catData = await Supabase.instance.client
+          .from('categories')
+          .select('id')
+          .eq('name', widget.category)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (catData == null) return;
+
+      final subs = await Supabase.instance.client
+          .from('subcategories')
+          .select('name')
+          .eq('category_id', catData['id'])
+          .eq('is_active', true)
+          .order('name');
+
+      if (mounted) {
+        setState(() {
+          _subcategories = (subs as List).map((s) => s['name'] as String).toList();
+        });
+      }
+    } catch (e) {
+      // sin subcategorías
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadBooks() async {
+    try {
+      var query = Supabase.instance.client
           .from('books')
           .select()
-          .eq('category', category)
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false);
+          .eq('category', widget.category)
+          .isFilter('deleted_at', null);
+
+      if (_selectedSubcategory != null) {
+        query = query.eq('subcategory', _selectedSubcategory!);
+      }
+
+      final response = await query.order('created_at', ascending: false);
       return response;
     } catch (e) {
       return [];
@@ -39,7 +86,7 @@ class CategoryBooksView extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: onBack,
+            onTap: widget.onBack,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -58,12 +105,25 @@ class CategoryBooksView extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            category,
+            widget.category,
             style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
           ),
+          // Filtros de subcategoría
+          if (_subcategories.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildChip('Todos', null),
+                  ..._subcategories.map((s) => _buildChip(s, s)),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           FutureBuilder<List<Map<String, dynamic>>>(
-            future: _loadBooksByCategory(),
+            future: _loadBooks(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: Colors.white));
@@ -140,6 +200,32 @@ class CategoryBooksView extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, String? value) {
+    final isSelected = _selectedSubcategory == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedSubcategory = value),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.orange : Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? Colors.orange : Colors.white.withOpacity(0.3),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            color: Colors.white,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
