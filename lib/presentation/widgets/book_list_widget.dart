@@ -190,8 +190,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                         ),
                       ),
                     ),
-                    if (widget.canEdit && (widget.userRole == 'bibliotecario' || widget.userRole == 'admin' || widget.userRole == 'administrador' || 
-                        (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
+                    if (widget.canEdit && (_isAdmin() || book['created_by'] == Supabase.instance.client.auth.currentUser?.id))
                       Positioned(
                         top: 4,
                         right: 4,
@@ -216,17 +215,16 @@ class _BookListWidgetState extends State<BookListWidget> {
                                 ],
                               ),
                             ),
-                            if (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 16, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar', style: TextStyle(color: Colors.red)),
-                                  ],
-                                ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 16, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                ],
                               ),
+                            ),
                           ],
                         ),
                       ),
@@ -278,10 +276,14 @@ class _BookListWidgetState extends State<BookListWidget> {
     );
   }
 
+  bool _isAdmin() {
+    return widget.userRole == 'admin' || widget.userRole == 'administrador';
+  }
+
   void _handleMenuAction(String action, Map<String, dynamic> book, BuildContext context) {
     if (action == 'edit') {
       _showEditDialog(context, book);
-    } else if (action == 'delete' && (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
+    } else if (action == 'delete') {
       _showDeleteDialog(context, book);
     }
   }
@@ -1022,6 +1024,16 @@ class _BookListWidgetState extends State<BookListWidget> {
                 print('🗑️ Creado por: ${book['created_by']}');
                 
                 final result = await Supabase.instance.client
+                    .from('book_stats')
+                    .delete()
+                    .eq('book_id', book['id']);
+                    
+                await Supabase.instance.client
+                    .from('favorites')
+                    .delete()
+                    .eq('book_id', book['id']);
+
+                await Supabase.instance.client
                     .from('books')
                     .delete()
                     .eq('id', book['id']);

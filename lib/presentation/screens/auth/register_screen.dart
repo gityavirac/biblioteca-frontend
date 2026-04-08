@@ -86,9 +86,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     } else {
+      String mensaje = 'Error en el registro. Verifica tu conexión e intenta de nuevo.';
+      final error = _authService.lastError ?? '';
+      if (error.contains('already registered') || error.contains('already been registered') || error.contains('User already')) {
+        mensaje = 'Este correo ya está registrado. Intenta iniciar sesión.';
+      } else if (error.contains('invalid') && error.contains('email')) {
+        mensaje = 'El formato del correo no es válido.';
+      } else if (error.contains('weak_password') || error.contains('password')) {
+        mensaje = 'La contraseña es muy débil. Usa al menos 6 caracteres.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error en el registro. Verifica tu conexión y configuración de Supabase', style: OptimizedTheme.bodyText),
+          content: Text(mensaje, style: OptimizedTheme.bodyText),
           backgroundColor: Colors.redAccent,
         ),
       );

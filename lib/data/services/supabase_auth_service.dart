@@ -31,50 +31,53 @@ class SupabaseAuthService {
         return false;
       }
 
+      // Verificar si el correo ya existe en public.users
+      final existing = await _supabase
+          .from('users')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+
+      if (existing != null) {
+        lastError = 'User already registered';
+        return false;
+      }
+
       print('Intentando registrar usuario: $email');
-      
+
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {'name': name}, // Agregar metadata
+        data: {'name': name},
       );
-
-      print('Respuesta de signUp: ${response.user?.id}');
 
       if (response.user != null) {
         try {
-          print('✅ Usuario creado en auth.users: ${response.user!.id}');
-          
-          // Insertar en public.users
-          final insertResult = await _supabase.from('users').insert({
+          await _supabase.from('users').insert({
             'id': response.user!.id,
             'email': email,
             'name': name,
-            'role': 'user', // Cambiar de 'lector' a 'user' para coincidir con las políticas
+            'role': 'lector',
             'created_at': DateTime.now().toIso8601String(),
-          }).select();
-          
-          print('✅ Usuario insertado en public.users: $insertResult');
-          
+          });
         } catch (e) {
-          print('❌ Error insertando usuario en tabla public.users: $e');
-          // Continuar aunque falle el insert en public.users
+          print('❌ Error insertando en public.users: $e');
+          lastError = e.toString();
+          return false;
         }
 
         _currentUser = app_user.User(
           id: response.user!.id,
           email: email,
           name: name,
-          role: app_user.UserRole.lector, // Mantener lector en el modelo
+          role: app_user.UserRole.lector,
           createdAt: DateTime.now(),
         );
         return true;
       }
     } catch (e) {
       print('Error en registro: $e');
-      if (e.toString().contains('anonymous_provider_disabled')) {
-        print('Error específico: Registro anónimo deshabilitado en Supabase');
-      }
+      lastError = e.toString();
     }
     return false;
   }
