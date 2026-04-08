@@ -207,8 +207,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                         ),
                       ),
                     ),
-                    if (widget.canEdit && (widget.userRole == 'bibliotecario' || widget.userRole == 'admin' || 
-                        (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
+                    if (widget.canEdit && (_isAdmin() || video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
                       Positioned(
                         top: 4,
                         right: 4,
@@ -233,17 +232,16 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                                 ],
                               ),
                             ),
-                            if (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 16, color: Colors.red),
-                                    SizedBox(width: 8),
-                                    Text('Eliminar', style: TextStyle(color: Colors.red)),
-                                  ],
-                                ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 16, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                ],
                               ),
+                            ),
                           ],
                         ),
                       ),
@@ -295,6 +293,8 @@ class _VideoListWidgetState extends State<VideoListWidget> {
     );
   }
 
+  bool _isAdmin() => widget.userRole == 'admin' || widget.userRole == 'administrador';
+
   void _handleMenuAction(String action, Map<String, dynamic> video, BuildContext context) {
     print('🎬 DEBUG: Action: $action, UserRole: ${widget.userRole}');
     print('🎬 DEBUG: Video created_by: ${video['created_by']}');
@@ -316,8 +316,9 @@ class _VideoListWidgetState extends State<VideoListWidget> {
     final urlController = TextEditingController(text: video['video_id'] ?? '');
     final descriptionController = TextEditingController(text: video['description'] ?? '');
     final thumbnailController = TextEditingController(text: video['thumbnail_url'] ?? '');
-    String selectedCategory = video['category'] ?? 'General';
-    
+    String selectedCategory = video['category'] ?? '';
+    String selectedSub = video['subcategory'] ?? '';
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -326,7 +327,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
           title: Text('Editar Video', style: GoogleFonts.outfit(color: Colors.white)),
           content: SizedBox(
             width: 500,
-            height: 400,
+            height: 500,
             child: SingleChildScrollView(
               child: Column(
                 children: [
@@ -376,27 +377,71 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                   ),
                   const SizedBox(height: 16),
                   FutureBuilder<List<Map<String, dynamic>>>(
-                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    future: Supabase.instance.client
+                        .from('categories')
+                        .select('name, subcategories(name, is_active)')
+                        .eq('is_active', true)
+                        .order('name'),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const CircularProgressIndicator(color: Colors.white);
+                      if (!snapshot.hasData) return const CircularProgressIndicator(color: Colors.white);
+                      final cats = snapshot.data!;
+                      final Map<String, List<String>> catMap = {};
+                      for (final cat in cats) {
+                        final subs = (cat['subcategories'] as List? ?? [])
+                            .where((s) => s['is_active'] != false)
+                            .map((s) => s['name'] as String)
+                            .toList();
+                        catMap[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
                       }
-                      final categories = snapshot.data!;
-                      return DropdownButtonFormField<String>(
-                        value: categories.any((cat) => cat['name'] == selectedCategory) ? selectedCategory : categories.first['name'],
-                        style: GoogleFonts.outfit(color: Colors.white),
-                        dropdownColor: const Color(0xFF1E293B),
-                        decoration: InputDecoration(
-                          labelText: 'Categoría',
-                          labelStyle: GoogleFonts.outfit(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                      if (!catMap.containsKey(selectedCategory) && catMap.isNotEmpty) {
+                        selectedCategory = catMap.keys.first;
+                      }
+                      final currentSubs = catMap[selectedCategory] ?? ['General'];
+                      if (!currentSubs.contains(selectedSub)) selectedSub = currentSubs.first;
+
+                      return StatefulBuilder(
+                        builder: (ctx, setInner) => Column(
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: selectedCategory.isEmpty ? catMap.keys.first : selectedCategory,
+                              style: GoogleFonts.outfit(color: Colors.white),
+                              dropdownColor: const Color(0xFF1E293B),
+                              decoration: InputDecoration(
+                                labelText: 'Categoría',
+                                labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                              ),
+                              items: catMap.keys.map<DropdownMenuItem<String>>((name) =>
+                                DropdownMenuItem(value: name, child: Text(name))).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedCategory = value!;
+                                  selectedSub = (catMap[value] ?? ['General']).first;
+                                });
+                                setInner(() {});
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: currentSubs.contains(selectedSub) ? selectedSub : currentSubs.first,
+                              style: GoogleFonts.outfit(color: Colors.white),
+                              dropdownColor: const Color(0xFF1E293B),
+                              decoration: InputDecoration(
+                                labelText: 'Subcategoría',
+                                labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                              ),
+                              items: currentSubs.map<DropdownMenuItem<String>>((sub) =>
+                                DropdownMenuItem(value: sub, child: Text(sub))).toList(),
+                              onChanged: (value) {
+                                setState(() => selectedSub = value!);
+                                setInner(() {});
+                              },
+                            ),
+                          ],
                         ),
-                        items: categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem(
-                          value: category['name'],
-                          child: Text(category['name']),
-                        )).toList(),
-                        onChanged: (value) => setState(() => selectedCategory = value!),
                       );
                     },
                   ),
@@ -417,9 +462,9 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                     'video_id': urlController.text,
                     'description': descriptionController.text.isEmpty ? null : descriptionController.text,
                     'category': selectedCategory,
+                    'subcategory': selectedSub,
                     'thumbnail_url': thumbnailController.text.isEmpty ? null : thumbnailController.text,
                   }).eq('id', video['id']);
-                  
                   Navigator.pop(context);
                   widget.onRefresh();
                   ScaffoldMessenger.of(context).showSnackBar(

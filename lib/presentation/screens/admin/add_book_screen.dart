@@ -48,29 +48,42 @@ class _AddBookScreenState extends State<AddBookScreen> {
     try {
       final cats = await Supabase.instance.client
           .from('categories')
-          .select('name, subcategories(name, is_active)')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+
+      final subs = await Supabase.instance.client
+          .from('subcategories')
+          .select('name, category_id')
           .eq('is_active', true)
           .order('name');
 
       final Map<String, List<String>> map = {};
       for (final cat in cats) {
-        final subs = (cat['subcategories'] as List)
-            .where((s) => s['is_active'] != false)
+        final catSubs = (subs as List)
+            .where((s) => s['category_id'] == cat['id'])
             .map((s) => s['name'] as String)
             .toList();
-        map[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
+        map[cat['name'] as String] = catSubs.isEmpty ? ['General'] : catSubs;
       }
 
       if (mounted) {
         setState(() {
-          _categories = map;
-          _selectedCategory = map.keys.isNotEmpty ? map.keys.first : null;
-          _selectedSubcategory = map.values.isNotEmpty ? map.values.first.first : null;
+          _categories = map.isEmpty ? {'General': ['General']} : map;
+          _selectedCategory = _categories.keys.first;
+          _selectedSubcategory = _categories.values.first.first;
           _loadingCategories = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _loadingCategories = false);
+      if (mounted) {
+        setState(() {
+          _categories = {'General': ['General']};
+          _selectedCategory = 'General';
+          _selectedSubcategory = 'General';
+          _loadingCategories = false;
+        });
+      }
     }
   }
 
@@ -587,23 +600,25 @@ class _AddBookScreenState extends State<AddBookScreen> {
   }
 
   Widget _buildDetailsSection() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildInput(_isbnController, 'ISBN', Icons.qr_code, 500),
+        Row(
+          children: [
+            Expanded(
+              child: _buildInput(_isbnController, 'ISBN', Icons.qr_code, 500),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildInput(_yearController, 'Año', Icons.calendar_today_outlined, 600, keyboardType: TextInputType.number),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildInput(_yearController, 'Año', Icons.calendar_today_outlined, 600, keyboardType: TextInputType.number),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildDropdown(
-            _selectedFormat,
-            'Formato',
-            ['pdf', 'epub'],
-            (value) => setState(() => _selectedFormat = value!),
-          ),
+        const SizedBox(height: 16),
+        _buildDropdown(
+          _selectedFormat,
+          'Formato',
+          ['pdf', 'epub'],
+          (value) => setState(() => _selectedFormat = value!),
         ),
       ],
     );
@@ -613,34 +628,52 @@ class _AddBookScreenState extends State<AddBookScreen> {
     if (_loadingCategories) {
       return const Center(child: CircularProgressIndicator(color: Colors.white));
     }
-    final subcats = _selectedCategory != null
-        ? (_categories[_selectedCategory!] ?? ['General'])
-        : ['General'];
-    // Asegurar que _selectedSubcategory sea válido para la lista actual
-    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory : subcats.first;
-    return Row(
+    final categoryList = _categories.keys.toList();
+    final validCat = categoryList.contains(_selectedCategory) ? _selectedCategory! : categoryList.first;
+    final subcats = _categories[validCat] ?? ['General'];
+    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory! : subcats.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _buildDropdown(
-            _selectedCategory ?? '',
-            'Categoría',
-            _categories.keys.toList(),
-            (value) => setState(() {
-              _selectedCategory = value;
-              final newSubs = _categories[value] ?? ['General'];
-              _selectedSubcategory = newSubs.first;
-              if (value == 'Libros Físicos') _isPhysical = true;
-            }),
+        // DEBUG
+        Container(
+          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(color: Colors.red.withOpacity(0.3), borderRadius: BorderRadius.circular(8)),
+          child: Text(
+            'DEBUG: cats=${categoryList.length} | selCat=$validCat | subs=${subcats.length} | subs=$subcats',
+            style: const TextStyle(color: Colors.white, fontSize: 10),
           ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildDropdown(
-            validSub ?? subcats.first,
-            'Subcategoría',
-            subcats,
-            (value) => setState(() => _selectedSubcategory = value),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                validCat,
+                'Categoría',
+                categoryList,
+                (value) => setState(() {
+                  _selectedCategory = value;
+                  final newSubs = _categories[value] ?? ['General'];
+                  _selectedSubcategory = newSubs.first;
+                  if (value == 'Libros Físicos') _isPhysical = true;
+                }),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdown(
+                validSub,
+                'Subcategoría',
+                subcats,
+                (value) => setState(() => _selectedSubcategory = value),
+              ),
+            ),
+          ],
         ),
       ],
     );

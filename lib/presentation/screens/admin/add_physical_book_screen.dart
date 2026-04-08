@@ -26,17 +26,59 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
   
   PlatformFile? _selectedCover;
   
-  String _selectedCategory = 'Desarrollo de Software';
-  String _selectedSubcategory = 'Frontend';
+  String? _selectedCategory;
+  String? _selectedSubcategory;
   bool _isLoading = false;
+  Map<String, List<String>> _categories = {};
+  bool _loadingCategories = true;
 
-  final Map<String, List<String>> _categories = {
-    'Desarrollo de Software': ['Frontend', 'Backend', 'Móvil', 'Base de Datos'],
-    'Marketing': ['Digital', 'Tradicional', 'Redes Sociales', 'SEO'],
-    'Guía Nacional de Turismo': ['Destinos', 'Hoteles', 'Restaurantes', 'Actividades'],
-    'Arte Culinaria': ['Cocina Nacional', 'Cocina Internacional', 'Repostería', 'Bebidas'],
-    'Idioma': ['Inglés', 'Francés', 'Alemán', 'Portugués'],
-  };
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final cats = await Supabase.instance.client
+          .from('categories')
+          .select('id, name')
+          .eq('is_active', true)
+          .order('name');
+
+      final subs = await Supabase.instance.client
+          .from('subcategories')
+          .select('name, category_id')
+          .eq('is_active', true)
+          .order('name');
+
+      final Map<String, List<String>> map = {};
+      for (final cat in cats) {
+        final catSubs = (subs as List)
+            .where((s) => s['category_id'] == cat['id'])
+            .map((s) => s['name'] as String)
+            .toList();
+        map[cat['name'] as String] = catSubs.isEmpty ? ['General'] : catSubs;
+      }
+      if (mounted) {
+        setState(() {
+          _categories = map.isEmpty ? {'General': ['General']} : map;
+          _selectedCategory = _categories.keys.first;
+          _selectedSubcategory = _categories.values.first.first;
+          _loadingCategories = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _categories = {'General': ['General']};
+          _selectedCategory = 'General';
+          _selectedSubcategory = 'General';
+          _loadingCategories = false;
+        });
+      }
+    }
+  }
 
   Future<void> _pickCover() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -102,7 +144,7 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
         'format': 'fisico',
         'category': _selectedCategory,
         'subcategory': _selectedSubcategory,
-        'categories': [_selectedCategory],
+        'categories': [if (_selectedCategory != null) _selectedCategory!],
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': true,
@@ -316,26 +358,28 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
             const SizedBox(height: 30),
             _buildSectionTitle('Categorización', Icons.category),
             const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(child: _buildDropdown(
-                  _selectedCategory,
-                  'Categoría',
-                  _categories.keys.toList(),
-                  (value) => setState(() {
-                    _selectedCategory = value!;
-                    _selectedSubcategory = _categories[value]!.first;
-                  }),
-                )),
-                const SizedBox(width: 16),
-                Expanded(child: _buildDropdown(
-                  _selectedSubcategory,
-                  'Subcategoría',
-                  _categories[_selectedCategory]!,
-                  (value) => setState(() => _selectedSubcategory = value!),
-                )),
-              ],
-            ),
+            if (_loadingCategories)
+              const Center(child: CircularProgressIndicator(color: Colors.white))
+            else ...[
+              _buildDropdown(
+                _categories.keys.contains(_selectedCategory) ? _selectedCategory! : _categories.keys.first,
+                'Categoría',
+                _categories.keys.toList(),
+                (value) => setState(() {
+                  _selectedCategory = value;
+                  _selectedSubcategory = (_categories[value] ?? ['General']).first;
+                }),
+              ),
+              const SizedBox(height: 16),
+              _buildDropdown(
+                (_categories[_selectedCategory ?? ''] ?? ['General']).contains(_selectedSubcategory)
+                    ? _selectedSubcategory!
+                    : (_categories[_selectedCategory ?? ''] ?? ['General']).first,
+                'Subcategoría',
+                _categories[_selectedCategory ?? ''] ?? ['General'],
+                (value) => setState(() => _selectedSubcategory = value),
+              ),
+            ],
             const SizedBox(height: 40),
             _buildSubmitButton(),
           ],

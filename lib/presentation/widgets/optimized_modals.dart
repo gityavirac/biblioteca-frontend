@@ -285,6 +285,7 @@ class _AddBookFormState extends State<_AddBookForm> {
   String? _selectedCategory;
   String? _selectedSubcategory;
   List<Map<String, dynamic>> _categories = [];
+  Map<String, List<String>> _subcategoriesMap = {};
   bool _isLoading = false;
   bool _loadingCategories = true;
   bool _useFileUpload = false;
@@ -304,16 +305,33 @@ class _AddBookFormState extends State<_AddBookForm> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
+      final cats = await Supabase.instance.client
           .from('categories')
-          .select('name')
+          .select('id, name')
           .eq('is_active', true)
           .order('name');
-      
+
+      final subs = await Supabase.instance.client
+          .from('subcategories')
+          .select('name, category_id')
+          .eq('is_active', true)
+          .order('name');
+
+      final Map<String, List<String>> map = {};
+      for (final cat in cats) {
+        final catSubs = (subs as List)
+            .where((s) => s['category_id'] == cat['id'])
+            .map((s) => s['name'] as String)
+            .toList();
+        map[cat['name'] as String] = catSubs.isEmpty ? ['General'] : catSubs;
+      }
+
       setState(() {
-        _categories = List<Map<String, dynamic>>.from(response);
+        _categories = List<Map<String, dynamic>>.from(cats);
+        _subcategoriesMap = map;
         if (_categories.isNotEmpty) {
           _selectedCategory = _categories.first['name'];
+          _selectedSubcategory = map[_selectedCategory!]?.first ?? 'General';
         }
         _loadingCategories = false;
       });
@@ -373,6 +391,8 @@ class _AddBookFormState extends State<_AddBookForm> {
               Row(
                 children: [
                   Expanded(child: _buildCategoryDropdown()),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildSubcategoryDropdown()),
                 ],
               ),
               const SizedBox(height: 32),
@@ -476,7 +496,37 @@ class _AddBookFormState extends State<_AddBookForm> {
         value: category['name'] as String,
         child: Text(category['name'] as String),
       )).toList(),
-      onChanged: (value) => setState(() => _selectedCategory = value),
+      onChanged: (value) => setState(() {
+        _selectedCategory = value;
+        final subcats = _subcategoriesMap[value] ?? ['General'];
+        _selectedSubcategory = subcats.first;
+      }),
+    );
+  }
+
+  Widget _buildSubcategoryDropdown() {
+    if (_loadingCategories) return const SizedBox.shrink();
+    final subcats = _subcategoriesMap[_selectedCategory] ?? ['General'];
+    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory! : subcats.first;
+    return DropdownButtonFormField<String>(
+      value: validSub,
+      decoration: InputDecoration(
+        labelText: 'Subcategoría',
+        labelStyle: OptimizedTheme.bodyTextSmall,
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dropdownColor: AppColors.yaviracBlueDark,
+      style: OptimizedTheme.bodyText,
+      items: subcats.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
+        value: s,
+        child: Text(s),
+      )).toList(),
+      onChanged: (value) => setState(() => _selectedSubcategory = value),
     );
   }
 
@@ -573,6 +623,7 @@ class _AddBookFormState extends State<_AddBookForm> {
         'year': _yearController.text.isEmpty ? null : int.tryParse(_yearController.text),
         'format': (widget.isPhysicalOnly || _isPhysical) ? 'pdf' : _selectedFormat,
         'category': _selectedCategory,
+        'subcategory': _selectedSubcategory,
         'published_date': DateTime.now().toIso8601String().split('T')[0],
         'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': widget.isPhysicalOnly || _isPhysical,
@@ -905,7 +956,9 @@ class _AddVideoFormState extends State<_AddVideoForm> {
   final _thumbnailController = TextEditingController();
   
   String? _selectedCategory;
+  String? _selectedSubcategory;
   List<Map<String, dynamic>> _categories = [];
+  Map<String, List<String>> _subcategoriesMap = {};
   bool _isLoading = false;
   bool _loadingCategories = true;
 
@@ -917,15 +970,34 @@ class _AddVideoFormState extends State<_AddVideoForm> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
+      final cats = await Supabase.instance.client
           .from('categories')
-          .select()
+          .select('id, name')
           .eq('is_active', true)
           .order('name');
-      
+
+      final subs = await Supabase.instance.client
+          .from('subcategories')
+          .select('name, category_id')
+          .eq('is_active', true)
+          .order('name');
+
+      final Map<String, List<String>> map = {};
+      for (final cat in cats) {
+        final catSubs = (subs as List)
+            .where((s) => s['category_id'] == cat['id'])
+            .map((s) => s['name'] as String)
+            .toList();
+        map[cat['name'] as String] = catSubs.isEmpty ? ['General'] : catSubs;
+      }
+
       setState(() {
-        _categories = List<Map<String, dynamic>>.from(response);
-        _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
+        _categories = List<Map<String, dynamic>>.from(cats);
+        _subcategoriesMap = map;
+        if (_categories.isNotEmpty) {
+          _selectedCategory = _categories.first['name'];
+          _selectedSubcategory = map[_selectedCategory!]?.first ?? 'General';
+        }
         _loadingCategories = false;
       });
     } catch (e) {
@@ -962,7 +1034,13 @@ class _AddVideoFormState extends State<_AddVideoForm> {
               const SizedBox(height: 16),
               _buildInput(_descriptionController, 'Descripción', Icons.description, maxLines: 3),
               const SizedBox(height: 16),
-              _buildCategoryDropdown(),
+              Row(
+                children: [
+                  Expanded(child: _buildCategoryDropdown()),
+                  const SizedBox(width: 16),
+                  Expanded(child: _buildSubcategoryDropdown()),
+                ],
+              ),
               const SizedBox(height: 32),
               _buildSubmitButton(),
             ],
@@ -1064,6 +1142,32 @@ class _AddVideoFormState extends State<_AddVideoForm> {
     );
   }
 
+  Widget _buildSubcategoryDropdown() {
+    if (_loadingCategories) return const SizedBox.shrink();
+    final subcats = _subcategoriesMap[_selectedCategory] ?? ['General'];
+    final validSub = subcats.contains(_selectedSubcategory) ? _selectedSubcategory! : subcats.first;
+    return DropdownButtonFormField<String>(
+      value: validSub,
+      decoration: InputDecoration(
+        labelText: 'Subcategoría',
+        labelStyle: OptimizedTheme.bodyTextSmall,
+        filled: true,
+        fillColor: Colors.black.withOpacity(0.3),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      dropdownColor: AppColors.yaviracBlueDark,
+      style: OptimizedTheme.bodyText,
+      items: subcats.map<DropdownMenuItem<String>>((s) => DropdownMenuItem<String>(
+        value: s,
+        child: Text(s),
+      )).toList(),
+      onChanged: (value) => setState(() => _selectedSubcategory = value),
+    );
+  }
+
   Future<void> _submitVideo() async {
     if (_titleController.text.isEmpty || _urlController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1080,6 +1184,7 @@ class _AddVideoFormState extends State<_AddVideoForm> {
         'video_id': _urlController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'category': _selectedCategory,
+        'subcategory': _selectedSubcategory,
         'thumbnail_url': _thumbnailController.text.isEmpty ? null : _thumbnailController.text,
         'created_by': Supabase.instance.client.auth.currentUser?.id,
       });

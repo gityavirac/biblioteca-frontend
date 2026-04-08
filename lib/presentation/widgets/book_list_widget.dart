@@ -301,6 +301,7 @@ class _BookListWidgetState extends State<BookListWidget> {
     
     String selectedFormat = book['format'] ?? 'pdf';
     String selectedCategory = book['category'] ?? 'General';
+    String selectedSub = book['subcategory'] ?? '';
     bool isPhysical = book['is_physical'] ?? false;
     bool useFileUpload = false;
     bool useCoverUpload = false;
@@ -597,27 +598,77 @@ class _BookListWidgetState extends State<BookListWidget> {
                   ),
                   const SizedBox(height: 16),
                   FutureBuilder<List<Map<String, dynamic>>>(
-                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    future: Supabase.instance.client.from('categories').select('name, subcategories(name, is_active)').eq('is_active', true).order('name'),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const CircularProgressIndicator(color: Colors.white);
                       }
                       final categories = snapshot.data!;
-                      return DropdownButtonFormField<String>(
-                        value: categories.any((cat) => cat['name'] == selectedCategory) ? selectedCategory : categories.first['name'],
-                        style: GoogleFonts.outfit(color: Colors.white),
-                        dropdownColor: const Color(0xFF1E293B),
-                        decoration: InputDecoration(
-                          labelText: 'Categoría',
-                          labelStyle: GoogleFonts.outfit(color: Colors.white70),
-                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
-                          focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                      // Construir mapa categoria -> subcategorias
+                      final Map<String, List<String>> catMap = {};
+                      for (final cat in categories) {
+                        final subs = (cat['subcategories'] as List)
+                            .where((s) => s['is_active'] != false)
+                            .map((s) => s['name'] as String)
+                            .toList();
+                        catMap[cat['name'] as String] = subs.isEmpty ? ['General'] : subs;
+                      }
+                      // Validar selectedCategory
+                      if (!catMap.containsKey(selectedCategory) && catMap.isNotEmpty) {
+                        selectedCategory = catMap.keys.first;
+                      }
+                      final currentSubs = catMap[selectedCategory] ?? ['General'];
+                      // Validar selectedSubcategory
+                      if (!currentSubs.contains(selectedSub)) selectedSub = currentSubs.first;
+
+                      return StatefulBuilder(
+                        builder: (context, setSubState) => Column(
+                          children: [
+                            DropdownButtonFormField<String>(
+                              value: catMap.containsKey(selectedCategory) ? selectedCategory : catMap.keys.first,
+                              style: GoogleFonts.outfit(color: Colors.white),
+                              dropdownColor: const Color(0xFF1E293B),
+                              decoration: InputDecoration(
+                                labelText: 'Categoría',
+                                labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                              ),
+                              items: catMap.keys.map<DropdownMenuItem<String>>((name) => DropdownMenuItem(
+                                value: name,
+                                child: Text(name),
+                              )).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  selectedCategory = value!;
+                                  final newSubs = catMap[value] ?? ['General'];
+                                  selectedSub = newSubs.first;
+                                });
+                                setSubState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: currentSubs.contains(selectedSub) ? selectedSub : currentSubs.first,
+                              style: GoogleFonts.outfit(color: Colors.white),
+                              dropdownColor: const Color(0xFF1E293B),
+                              decoration: InputDecoration(
+                                labelText: 'Subcategoría',
+                                labelStyle: GoogleFonts.outfit(color: Colors.white70),
+                                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
+                                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.orange)),
+                              ),
+                              items: currentSubs.map<DropdownMenuItem<String>>((sub) => DropdownMenuItem(
+                                value: sub,
+                                child: Text(sub),
+                              )).toList(),
+                              onChanged: (value) {
+                                setState(() => selectedSub = value!);
+                                setSubState(() {});
+                              },
+                            ),
+                          ],
                         ),
-                        items: categories.map<DropdownMenuItem<String>>((category) => DropdownMenuItem(
-                          value: category['name'],
-                          child: Text(category['name']),
-                        )).toList(),
-                        onChanged: (value) => setState(() => selectedCategory = value!),
                       );
                     },
                   ),
@@ -754,6 +805,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                     'year': yearController.text.isEmpty ? null : int.tryParse(yearController.text),
                     'format': selectedFormat,
                     'category': selectedCategory,
+                    'subcategory': selectedSub,
                     'is_physical': isPhysical,
                     'physical_location': isPhysical ? locationController.text : null,
                     'codigo_fisico': isPhysical ? codigoFisicoController.text : null,
