@@ -890,6 +890,19 @@ class _ProfileTab extends StatefulWidget {
 }
 
 class _ProfileTabState extends State<_ProfileTab> {
+  late Future<List<Map<String, dynamic>>> _booksFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _booksFuture = _loadMyBooks();
+  }
+
+  void _reloadBooks() {
+    setState(() {
+      _booksFuture = _loadMyBooks();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1010,7 +1023,7 @@ class _ProfileTabState extends State<_ProfileTab> {
       ),
       const SizedBox(height: 16),
       FutureBuilder<List<Map<String, dynamic>>>(
-        future: _loadMyBooks(),
+        future: _booksFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -1091,15 +1104,24 @@ class _ProfileTabState extends State<_ProfileTab> {
 
   Future<List<Map<String, dynamic>>> _loadMyBooks() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return [];
+    if (user == null) {
+      print('⚠️ [LOAD] No hay usuario autenticado');
+      return [];
+    }
     try {
+      print('🔄 [LOAD] Cargando libros de user=${user.id}');
       final response = await Supabase.instance.client
           .from('books')
           .select()
           .eq('created_by', user.id)
           .order('created_at', ascending: false);
+      print('✅ [LOAD] ${response.length} libros encontrados');
+      for (final b in response) {
+        print('  📚 id=${b['id']} title=${b['title']} cover_url=${b['cover_url']}');
+      }
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
+      print('❌ [LOAD] Error: $e');
       return [];
     }
   }
@@ -1293,36 +1315,53 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 
   Future<void> _updateBook(BuildContext context, String id, Map<String, dynamic> data) async {
+    print('📝 [UPDATE] Iniciando actualización libro id=$id');
+    print('📝 [UPDATE] Datos a enviar: $data');
     try {
-      await Supabase.instance.client.from('books').update(data).eq('id', id);
+      final response = await Supabase.instance.client
+          .from('books')
+          .update(data)
+          .eq('id', id)
+          .select()
+          .single();
+      print('✅ [UPDATE] Respuesta de Supabase: $response');
+      print('✅ [UPDATE] cover_url guardado: ${response['cover_url']}');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Libro actualizado'), backgroundColor: Colors.green),
+          SnackBar(
+            content: Text('✅ Libro actualizado. Portada: ${response['cover_url'] ?? 'sin portada'}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 4),
+          ),
         );
-        setState(() {});
+        _reloadBooks();
       }
     } catch (e) {
+      print('❌ [UPDATE] Error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('❌ Error al actualizar: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
   Future<void> _deleteBook(BuildContext context, String id) async {
+    print('🗑️ [DELETE] Eliminando libro id=$id');
     try {
       await Supabase.instance.client.from('books').delete().eq('id', id);
+      print('✅ [DELETE] Libro eliminado correctamente');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('🗑️ Libro eliminado'), backgroundColor: Colors.orange),
         );
-        setState(() {});
+        _reloadBooks();
       }
     } catch (e) {
+      print('❌ [DELETE] Error: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('❌ Error al eliminar: $e'), backgroundColor: Colors.red),
         );
       }
     }

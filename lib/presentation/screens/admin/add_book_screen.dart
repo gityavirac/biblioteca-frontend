@@ -208,7 +208,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
       // Solo subir portada si NO es libro físico exclusivo
       if (!isPhysicalOnly && _selectedCover != null) {
         try {
-          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover.jpg';
+          final coverName = 'cover_${DateTime.now().millisecondsSinceEpoch}.jpg';
           
           if (_selectedCover!.bytes != null) {
             await Supabase.instance.client.storage

@@ -531,7 +531,9 @@ class _AddBookFormState extends State<_AddBookForm> {
       // Subir portada si es local
       if (_selectedCover != null) {
         try {
-          final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
+          final ts = DateTime.now().millisecondsSinceEpoch;
+          final ext = _selectedCover!.name.split('.').last.toLowerCase();
+          final coverName = 'cover_${ts}.$ext';
           
           if (_selectedCover!.bytes != null) {
             await Supabase.instance.client.storage
@@ -741,7 +743,9 @@ class _AddBookFormState extends State<_AddBookForm> {
     setState(() => _uploadingFile = true);
 
     try {
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName';
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final ext = _selectedFileName!.split('.').last.toLowerCase();
+      final fileName = 'book_${ts}.$ext';
       
       await Supabase.instance.client.storage
           .from('Libros_digitales')
