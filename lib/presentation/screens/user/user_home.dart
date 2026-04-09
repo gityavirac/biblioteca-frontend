@@ -2981,11 +2981,37 @@ class _RequestItem extends StatelessWidget {
   }
 }
 
-class _PhysicalBooksTab extends StatelessWidget {
+class _PhysicalBooksTab extends StatefulWidget {
   final bool canEdit;
   final String userRole;
   
   const _PhysicalBooksTab({required this.canEdit, required this.userRole});
+
+  @override
+  State<_PhysicalBooksTab> createState() => _PhysicalBooksTabState();
+}
+
+class _PhysicalBooksTabState extends State<_PhysicalBooksTab> {
+  late Future<List<Map<String, dynamic>>> _booksFuture;
+  bool _isAdmin = false;
+  String? _currentUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    _checkAdminRole();
+    _booksFuture = _loadPhysicalBooks();
+  }
+
+  Future<void> _checkAdminRole() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    final data = await Supabase.instance.client
+        .from('users').select('role').eq('id', user.id).single();
+    final role = data['role']?.toString().toLowerCase() ?? '';
+    if (mounted) setState(() => _isAdmin = role == 'admin' || role == 'administrador');
+  }
 
   Future<List<Map<String, dynamic>>> _loadPhysicalBooks() async {
     try {
@@ -2999,6 +3025,44 @@ class _PhysicalBooksTab extends StatelessWidget {
       print('Error loading physical books: $e');
       return [];
     }
+  }
+
+  Future<void> _deleteStorageFile(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final segments = uri.pathSegments;
+      final publicIndex = segments.indexOf('public');
+      if (publicIndex == -1 || publicIndex + 2 >= segments.length) return;
+      final bucket = segments[publicIndex + 1];
+      final fileName = segments.sublist(publicIndex + 2).join('/');
+      await Supabase.instance.client.storage.from(bucket).remove([fileName]);
+    } catch (_) {}
+  }
+
+  Future<void> _deleteBook(String id, Map<String, dynamic> book) async {
+    try {
+      final fileUrl = book['file_url'] as String?;
+      final coverUrl = book['cover_url'] as String?;
+      if (fileUrl != null && fileUrl.contains('/storage/')) await _deleteStorageFile(fileUrl);
+      if (coverUrl != null && coverUrl.contains('/storage/')) await _deleteStorageFile(coverUrl);
+      await Supabase.instance.client.rpc('delete_book_complete', params: {'p_book_id': id});
+      setState(() => _booksFuture = _loadPhysicalBooks());
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Libro eliminado completamente'), backgroundColor: Colors.orange),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _showEditDialog(Map<String, dynamic> book) {
+    showBookEditDialog(
+      context: context,
+      book: book,
+      onRefresh: () => setState(() => _booksFuture = _loadPhysicalBooks()),
+    );
   }
 
   @override
@@ -3015,7 +3079,7 @@ class _PhysicalBooksTab extends StatelessWidget {
           const SizedBox(height: 16),
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _loadPhysicalBooks(),
+              future: _booksFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Colors.white));
@@ -3054,92 +3118,78 @@ class _PhysicalBooksTab extends StatelessWidget {
                           builder: (context) => BookDetailScreen(book: book),
                         ),
                       ),
-                      child: GlassmorphicContainer(
-                        width: double.infinity,
-                        height: double.infinity,
-                        borderRadius: 8,
-                        blur: 8,
-                        alignment: Alignment.center,
-                        border: 0,
-                        linearGradient: LinearGradient(
-                          colors: [
-                            Colors.green.withOpacity(0.15),
-                            Colors.green.withOpacity(0.08),
-                          ],
-                        ),
-                        borderGradient: LinearGradient(
-                          colors: [
-                            Colors.green.withOpacity(0.3),
-                            Colors.white.withOpacity(0.1),
-                          ],
-                        ),
+                      child: Card(
+                        color: Colors.green.withOpacity(0.1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: Column(
                           children: [
                             Expanded(
-                              flex: 4,
-                              child: Container(
-                                margin: const EdgeInsets.all(6),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: book['cover_url'] != null
-                                      ? Image.network(
-                                          book['cover_url'],
-                                          fit: BoxFit.cover,
-                                          width: double.infinity,
-                                          errorBuilder: (_, __, ___) => Container(
-                                            color: Colors.green.withOpacity(0.2),
-                                            child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                    child: book['cover_url'] != null
+                                        ? Image.network(book['cover_url'], fit: BoxFit.cover, width: double.infinity, height: double.infinity,
+                                            errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.location_on, size: 30, color: Colors.green)))
+                                        : const Center(child: Icon(Icons.location_on, size: 30, color: Colors.green)),
+                                  ),
+                                  if (_isAdmin || (widget.canEdit && book['created_by'] == _currentUserId))
+                                    Positioned(
+                                      top: 4, right: 4,
+                                      child: PopupMenuButton<String>(
+                                        icon: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
-                                        )
-                                      : Container(
-                                          color: Colors.green.withOpacity(0.2),
-                                          child: const Icon(Icons.location_on, size: 30, color: Colors.green),
+                                          child: const Icon(Icons.more_vert, color: Colors.white, size: 16),
                                         ),
-                                ),
+                                        color: const Color(0xFF1E293B),
+                                        itemBuilder: (ctx) => [
+                                          const PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit, size: 16), SizedBox(width: 8), Text('Editar')])),
+                                          const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, size: 16, color: Colors.red), SizedBox(width: 8), Text('Eliminar', style: TextStyle(color: Colors.red))])),
+                                        ],
+                                        onSelected: (value) {
+                                          if (value == 'edit') _showEditDialog(book);
+                                          if (value == 'delete') showDialog(
+                                            context: context,
+                                            builder: (ctx) => AlertDialog(
+                                              backgroundColor: const Color(0xFF1E293B),
+                                              title: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                              content: Text('¿Eliminar "${book['title']}"?', style: const TextStyle(color: Colors.white70)),
+                                              actions: [
+                                                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                                  onPressed: () { Navigator.pop(ctx); _deleteBook(book['id'], book); },
+                                                  child: const Text('Eliminar', style: TextStyle(color: Colors.white)),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            Flexible(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      book['title'] ?? 'Sin título',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
+                            Padding(
+                              padding: const EdgeInsets.all(6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(book['title'] ?? 'Sin título', style: OptimizedTheme.caption.copyWith(fontSize: 11, fontWeight: FontWeight.w600), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                  Text(book['author'] ?? '', style: OptimizedTheme.caption.copyWith(fontSize: 9, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
-                                    Text(
-                                      book['author'] ?? 'Autor desconocido',
-                                      style: OptimizedTheme.caption.copyWith(
-                                        fontSize: 8,
-                                        color: Colors.white70,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green.withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'FÍSICO',
-                                        style: OptimizedTheme.caption.copyWith(
-                                          fontSize: 6,
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                    child: Text('FÍSICO', style: OptimizedTheme.caption.copyWith(fontSize: 6, color: Colors.green, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -3172,12 +3222,15 @@ class _AllBooksTabState extends State<_AllBooksTab> {
   static const int _limit = 30;
   bool _hasMore = true;
   bool _canEdit = false;
+  bool _isAdmin = false;
+  String? _currentUserId;
   int _totalBooks = 0;
   final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
+    _currentUserId = Supabase.instance.client.auth.currentUser?.id;
     _checkRole();
     _loadMore();
     _scrollController.addListener(() {
@@ -3199,7 +3252,10 @@ class _AllBooksTabState extends State<_AllBooksTab> {
     final data = await Supabase.instance.client
         .from('users').select('role').eq('id', user.id).single();
     final role = data['role']?.toString().toLowerCase() ?? '';
-    if (mounted) setState(() => _canEdit = ['admin', 'administrador', 'profesor', 'bibliotecario'].contains(role));
+    if (mounted) setState(() {
+      _canEdit = ['admin', 'administrador', 'profesor', 'bibliotecario'].contains(role);
+      _isAdmin = role == 'admin' || role == 'administrador';
+    });
     // Cargar total
     try {
       final response = await Supabase.instance.client
@@ -3313,7 +3369,7 @@ class _AllBooksTabState extends State<_AllBooksTab> {
                                         errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.book, size: 30, color: Colors.white54)))
                                     : const Center(child: Icon(Icons.book, size: 30, color: Colors.white54)),
                               ),
-                              if (_canEdit)
+                              if (_isAdmin || (_canEdit && book['created_by'] == _currentUserId))
                                 Positioned(
                                   top: 4, right: 4,
                                   child: PopupMenuButton<String>(

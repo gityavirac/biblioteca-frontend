@@ -360,13 +360,10 @@ class _BooksTabState extends State<_BooksTab> {
   Future<void> _deleteBook(String bookId) async {
     try {
       await Supabase.instance.client
-          .from('books')
-          .delete()
-          .eq('id', bookId);
+          .rpc('delete_book_complete', params: {'p_book_id': bookId});
       
-      // Refresh UI
       if (mounted) {
-        setState(() {}); // Refresh UI
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Libro eliminado correctamente', style: GoogleFonts.outfit()),
