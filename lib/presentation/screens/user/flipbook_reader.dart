@@ -33,6 +33,8 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   bool _isDarkMode = false;
   bool _isFavorite = false;
   final FocusNode _focusNode = FocusNode();
+  late final TransformationController _transformationController;
+  double _zoomLevel = 1.0;
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _transformationController = TransformationController();
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_fadeController);
     _fadeController.forward();
     _loadPdf();
@@ -55,6 +58,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   void dispose() {
     _fadeController.dispose();
     _focusNode.dispose();
+    _transformationController.dispose();
     super.dispose();
   }
 
@@ -158,7 +162,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
     print('📚 Es Web: $kIsWeb');
     
     try {
-      final url = widget.book['file_url'];
+      final url = (widget.book['file_url'] as String?)?.trim().replaceAll(RegExp(r'\?+$'), '');
       if (url == null) {
         print('❌ URL del libro es null');
         throw Exception('URL del libro no encontrada');
@@ -502,6 +506,18 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
               color: Colors.white,
               onTap: _toggleFullScreen,
             ),
+            const SizedBox(width: 8),
+            _buildHeaderButton(
+              icon: Icons.zoom_out,
+              color: Colors.white,
+              onTap: _zoomOut,
+            ),
+            const SizedBox(width: 8),
+            _buildHeaderButton(
+              icon: Icons.zoom_in,
+              color: Colors.white,
+              onTap: _zoomIn,
+            ),
           ],
         ),
       ),
@@ -552,6 +568,28 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
     );
   }
 
+  void _zoomIn() {
+    _zoomLevel = (_zoomLevel + 0.25).clamp(0.5, 3.0);
+    final size = MediaQuery.of(context).size;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    _transformationController.value = Matrix4.identity()
+      ..translate(cx, cy)
+      ..scale(_zoomLevel)
+      ..translate(-cx, -cy);
+  }
+
+  void _zoomOut() {
+    _zoomLevel = (_zoomLevel - 0.25).clamp(0.5, 3.0);
+    final size = MediaQuery.of(context).size;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    _transformationController.value = Matrix4.identity()
+      ..translate(cx, cy)
+      ..scale(_zoomLevel)
+      ..translate(-cx, -cy);
+  }
+
   Widget _buildBookViewer() {
     if (_document == null) return const SizedBox();
 
@@ -580,6 +618,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
           width: double.infinity,
           height: double.infinity,
           child: InteractiveViewer(
+            transformationController: _transformationController,
             minScale: 0.5,
             maxScale: 3.0,
             panEnabled: true,
@@ -682,6 +721,18 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
             color: Colors.white,
             onTap: _toggleFullScreen,
           ),
+          const SizedBox(width: 8),
+          _buildFloatingButton(
+            icon: Icons.zoom_out,
+            color: Colors.white,
+            onTap: _zoomOut,
+          ),
+          const SizedBox(width: 8),
+          _buildFloatingButton(
+            icon: Icons.zoom_in,
+            color: Colors.white,
+            onTap: _zoomIn,
+          ),
         ],
       ),
     );
@@ -708,6 +759,7 @@ class _FlipBookReaderState extends State<FlipBookReader> with TickerProviderStat
   }
 
   Widget _buildNavigationOverlay() {
+    if (_zoomLevel > 1.0) return const SizedBox.expand();
     return Row(
       children: [
         Expanded(
