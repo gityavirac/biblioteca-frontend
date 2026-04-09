@@ -6,6 +6,9 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Biblioteca Digital Yavirac">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   
   <!-- Compatibilidad con navegadores -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -71,6 +74,15 @@
   </div>
   
   <script>
+    // Desregistrar service worker para evitar caché
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
+    
     // Compatibilidad con navegadores
     if (!window.customElements) {
       document.write('<script src="https://unpkg.com/@webcomponents/webcomponentsjs@^2/webcomponents-loader.js"><\/script>');
