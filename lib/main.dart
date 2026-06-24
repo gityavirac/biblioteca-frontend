@@ -1,55 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/optimized_theme.dart';
 import 'core/providers/theme_provider.dart';
+import 'data/api/api_client.dart';
+import 'data/services/supabase_auth_service.dart';
 import 'presentation/screens/auth/login_screen.dart';
 import 'presentation/screens/auth/reset_password_screen.dart';
 import 'presentation/screens/user/user_home.dart';
 import 'presentation/screens/splash/splash_screen.dart';
-import 'data/services/database_seeder.dart';
-import 'data/services/supabase_auth_service.dart';
 
 void main() async {
-  try {
-    WidgetsFlutterBinding.ensureInitialized();
-    
-    // Mostrar app inmediatamente
-    runApp(const AppState());
-    
-    // Inicializar Supabase en background
-    _initializeSupabaseInBackground();
-    
-  } catch (e) {
-    print('Error initializing app: $e');
-    runApp(const AppState());
-  }
-}
+  WidgetsFlutterBinding.ensureInitialized();
 
-void _initializeSupabaseInBackground() async {
+  // Cargar el token guardado (si lo hay) antes de mostrar la app.
   try {
-    await Supabase.initialize(
-      url: 'https://pnefkrshzhlelycbxhqg.supabase.co',
-      anonKey: 'sb_publishable_6zUbPKbRdpcFyXmq8QuCKA_r27hgz1m',
-    );
-    _seedDataInBackground();
+    await ApiClient.instance.init();
   } catch (e) {
-    print('Error initializing Supabase: $e');
+    print('Error initializing API client: $e');
   }
-}
 
-void _seedDataInBackground() {
-  // Ejecutar en background para no bloquear la UI
-  Future.delayed(const Duration(seconds: 5), () async {
-    try {
-      await DatabaseSeeder.seedBooks();
-      await DatabaseSeeder.seedVideos();
-    } catch (e) {
-      print('Error seeding data: $e');
-    }
-  });
+  runApp(const AppState());
 }
 
 class AppState extends StatelessWidget {
@@ -83,49 +55,33 @@ class _BibliotecaDigitalAppState extends State<BibliotecaDigitalApp> {
   void initState() {
     super.initState();
     _checkSession();
-    _setupAuthListener();
   }
 
   Future<void> _checkSession() async {
     try {
-      final session = Supabase.instance.client.auth.currentSession;
-      if (session != null) {
-        final user = Supabase.instance.client.auth.currentUser;
-        if (user != null) {
-          setState(() {
-            _initialScreen = UserHome(authService: SupabaseAuthService());
-            _isCheckingSession = false;
-          });
-          return;
-        }
+      final auth = SupabaseAuthService();
+      final ok = await auth.restoreSession();
+      if (ok) {
+        setState(() {
+          _initialScreen = UserHome(authService: auth);
+          _isCheckingSession = false;
+        });
+        return;
       }
     } catch (e) {
       print('Error checking session: $e');
       // Continuar con login screen si hay error
     }
-    
+
     setState(() {
       _isCheckingSession = false;
-    });
-  }
-
-  void _setupAuthListener() {
-    Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      final event = data.event;
-      final session = data.session;
-      
-      if (event == AuthChangeEvent.passwordRecovery && session != null) {
-        _navigatorKey.currentState?.pushReplacement(
-          MaterialPageRoute(builder: (context) => const ResetPasswordScreen()),
-        );
-      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
+
     return MaterialApp(
       navigatorKey: _navigatorKey,
       title: AppConstants.appName,
@@ -167,7 +123,7 @@ class _BibliotecaDigitalAppState extends State<BibliotecaDigitalApp> {
       },
       builder: (context, child) {
         return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
           child: child!,
         );
       },

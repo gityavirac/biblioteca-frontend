@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import '../../../core/theme/optimized_theme.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../data/services/category_service.dart';
 
 class CategoriesManagementScreen extends StatefulWidget {
   const CategoriesManagementScreen({super.key});
@@ -13,6 +13,7 @@ class CategoriesManagementScreen extends StatefulWidget {
 }
 
 class _CategoriesManagementScreenState extends State<CategoriesManagementScreen> {
+  final _categoryService = CategoryService();
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = true;
   final _nameController = TextEditingController();
@@ -33,14 +34,10 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
-          .from('categories')
-          .select()
-          .eq('is_active', true)
-          .order('name');
-      
+      final response = await _categoryService.getCategories();
+
       setState(() {
-        _categories = List<Map<String, dynamic>>.from(response);
+        _categories = response;
         _isLoading = false;
       });
     } catch (e) {
@@ -53,11 +50,10 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
     if (_nameController.text.trim().isEmpty) return;
 
     try {
-      await Supabase.instance.client.from('categories').insert({
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
-      });
+      await _categoryService.createCategory(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+      );
 
       _nameController.clear();
       _descriptionController.clear();
@@ -78,10 +74,11 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
     if (_nameController.text.trim().isEmpty) return;
 
     try {
-      await Supabase.instance.client.from('categories').update({
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-      }).eq('id', id);
+      await _categoryService.updateCategory(
+        id,
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+      );
 
       _nameController.clear();
       _descriptionController.clear();
@@ -100,11 +97,8 @@ class _CategoriesManagementScreenState extends State<CategoriesManagementScreen>
 
   Future<void> _deleteCategory(String id) async {
     try {
-      await Supabase.instance.client
-          .from('categories')
-          .update({'is_active': false})
-          .eq('id', id);
-      
+      await _categoryService.deleteCategory(id);
+
       _loadCategories();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Categoría eliminada')),

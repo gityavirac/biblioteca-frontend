@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import '../../data/services/cache_service.dart';
+import '../../data/services/video_service.dart';
+import '../../data/services/category_service.dart';
+import '../../data/services/supabase_auth_service.dart';
 import '../screens/user/mobile_video_player.dart';
 
 class VideoListWidget extends StatefulWidget {
@@ -208,7 +210,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                       ),
                     ),
                     if (widget.canEdit && (widget.userRole == 'bibliotecario' || widget.userRole == 'admin' || 
-                        (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
+                        (widget.userRole == 'profesor' && video['created_by'] == SupabaseAuthService().currentUser?.id)))
                       Positioned(
                         top: 4,
                         right: 4,
@@ -233,7 +235,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                                 ],
                               ),
                             ),
-                            if (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))
+                            if (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == SupabaseAuthService().currentUser?.id))
                               const PopupMenuItem(
                                 value: 'delete',
                                 child: Row(
@@ -298,12 +300,12 @@ class _VideoListWidgetState extends State<VideoListWidget> {
   void _handleMenuAction(String action, Map<String, dynamic> video, BuildContext context) {
     print('🎬 DEBUG: Action: $action, UserRole: ${widget.userRole}');
     print('🎬 DEBUG: Video created_by: ${video['created_by']}');
-    print('🎬 DEBUG: Current user: ${Supabase.instance.client.auth.currentUser?.id}');
+    print('🎬 DEBUG: Current user: ${SupabaseAuthService().currentUser?.id}');
     
     if (action == 'edit') {
       print('🎬 DEBUG: Calling _showEditDialog');
       _showEditDialog(context, video);
-    } else if (action == 'delete' && (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
+    } else if (action == 'delete' && (widget.userRole == 'admin' || (widget.userRole == 'profesor' && video['created_by'] == SupabaseAuthService().currentUser?.id))) {
       print('🎬 DEBUG: Calling _showDeleteDialog');
       _showDeleteDialog(context, video);
     } else {
@@ -376,7 +378,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
                   ),
                   const SizedBox(height: 16),
                   FutureBuilder<List<Map<String, dynamic>>>(
-                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    future: CategoryService().getCategories(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const CircularProgressIndicator(color: Colors.white);
@@ -412,13 +414,13 @@ class _VideoListWidgetState extends State<VideoListWidget> {
             TextButton(
               onPressed: () async {
                 try {
-                  await Supabase.instance.client.from('videos').update({
+                  await VideoService().updateVideo(video['id'], {
                     'title': titleController.text,
                     'video_id': urlController.text,
                     'description': descriptionController.text.isEmpty ? null : descriptionController.text,
                     'category': selectedCategory,
                     'thumbnail_url': thumbnailController.text.isEmpty ? null : thumbnailController.text,
-                  }).eq('id', video['id']);
+                  });
                   
                   Navigator.pop(context);
                   widget.onRefresh();
@@ -461,8 +463,7 @@ class _VideoListWidgetState extends State<VideoListWidget> {
               Navigator.pop(context);
               try {
                 print('🎬 DEBUG: Attempting to delete video with ID: ${video['id']}');
-                final result = await Supabase.instance.client.from('videos').delete().eq('id', video['id']);
-                print('🎬 DEBUG: Delete result: $result');
+                await VideoService().deleteVideo(video['id']);
                 print('🎬 DEBUG: Video deleted successfully');
                 print('🎬 DEBUG: Calling onRefresh()');
                 widget.onRefresh();

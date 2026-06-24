@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import '../../../data/services/video_service.dart';
 import 'mobile_video_player.dart';
 
 class CategoryVideosView extends StatelessWidget {
@@ -27,13 +27,9 @@ class CategoryVideosView extends StatelessWidget {
   };
 
   Future<List<Map<String, dynamic>>> _loadVideosBySubcategory(String category, String subcategory) async {
+    // El backend filtra por categoría (no existe subcategoría en el modelo).
     try {
-      final response = await Supabase.instance.client
-          .from('videos')
-          .select()
-          .eq('category', category)
-          .eq('subcategory', subcategory);
-      return response;
+      return await VideoService().getVideos(category: category);
     } catch (e) {
       return [];
     }

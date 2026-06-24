@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../theme/glass_theme.dart';
 import '../../widgets/common_widgets.dart';
 import '../../../data/services/cache_service.dart';
+import '../../../data/services/video_service.dart';
 
 class AddVideoScreen extends StatefulWidget {
   const AddVideoScreen({super.key});
@@ -49,14 +49,13 @@ class _AddVideoScreenState extends State<AddVideoScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await Supabase.instance.client.from('videos').insert({
+      await VideoService().createVideo({
         'title': _titleController.text,
         'video_id': _urlController.text,
         'thumbnail_url': _thumbnailController.text.isEmpty ? null : _thumbnailController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'category': _selectedCategory,
         'subcategory': _selectedSubcategory,
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
 
       if (mounted) {

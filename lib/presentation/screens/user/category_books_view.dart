@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../data/services/book_service.dart';
 
 class CategoryBooksView extends StatelessWidget {
   final String category;
@@ -25,13 +25,9 @@ class CategoryBooksView extends StatelessWidget {
   };
 
   Future<List<Map<String, dynamic>>> _loadBooksBySubcategory(String category, String subcategory) async {
+    // El backend filtra por categoría (no existe subcategoría en el modelo).
     try {
-      final response = await Supabase.instance.client
-          .from('books')
-          .select()
-          .eq('category', category)
-          .eq('subcategory', subcategory);
-      return response;
+      return await BookService().getBooks(category: category);
     } catch (e) {
       return [];
     }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/optimized_theme.dart';
+import '../../data/services/book_service.dart';
+import '../../data/services/video_service.dart';
+import '../../data/services/category_service.dart';
+import '../../data/services/upload_service.dart';
 
 class OptimizedModals {
   
@@ -304,14 +307,10 @@ class _AddBookFormState extends State<_AddBookForm> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
-          .from('categories')
-          .select('name')
-          .eq('is_active', true)
-          .order('name');
-      
+      final response = await CategoryService().getCategories();
+
       setState(() {
-        _categories = List<Map<String, dynamic>>.from(response);
+        _categories = response;
         if (_categories.isNotEmpty) {
           _selectedCategory = _categories.first['name'];
         }
@@ -534,13 +533,8 @@ class _AddBookFormState extends State<_AddBookForm> {
           final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
           
           if (_selectedCover!.bytes != null) {
-            await Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .uploadBinary(coverName, _selectedCover!.bytes!);
-            
-            coverUrl = Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .getPublicUrl(coverName);
+            coverUrl = await UploadService()
+                .upload(_selectedCover!.bytes!, coverName);
           }
         } catch (storageError) {
           print('Error subiendo portada: $storageError');
@@ -561,7 +555,7 @@ class _AddBookFormState extends State<_AddBookForm> {
         }
       }
 
-      await Supabase.instance.client.from('books').insert({
+      await BookService().createBook({
         'title': _titleController.text,
         'author': _authorController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
@@ -572,9 +566,7 @@ class _AddBookFormState extends State<_AddBookForm> {
         'format': (widget.isPhysicalOnly || _isPhysical) ? 'pdf' : _selectedFormat,
         'category': _selectedCategory,
         'published_date': DateTime.now().toIso8601String().split('T')[0],
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': widget.isPhysicalOnly || _isPhysical,
-        'is_physical_only': widget.isPhysicalOnly,
         'physical_location': (widget.isPhysicalOnly || _isPhysical) ? _locationController.text : null,
         'codigo_fisico': (widget.isPhysicalOnly || _isPhysical) ? _codigoFisicoController.text : null,
       });
@@ -742,14 +734,8 @@ class _AddBookFormState extends State<_AddBookForm> {
 
     try {
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_$_selectedFileName';
-      
-      await Supabase.instance.client.storage
-          .from('Libros_digitales')
-          .uploadBinary(fileName, _selectedFile!);
 
-      final publicUrl = Supabase.instance.client.storage
-          .from('Libros_digitales')
-          .getPublicUrl(fileName);
+      final publicUrl = await UploadService().upload(_selectedFile!, fileName);
 
       return publicUrl;
     } catch (e) {
@@ -913,14 +899,10 @@ class _AddVideoFormState extends State<_AddVideoForm> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
-          .from('categories')
-          .select()
-          .eq('is_active', true)
-          .order('name');
-      
+      final response = await CategoryService().getCategories();
+
       setState(() {
-        _categories = List<Map<String, dynamic>>.from(response);
+        _categories = response;
         _selectedCategory = _categories.isNotEmpty ? _categories.first['name'] : null;
         _loadingCategories = false;
       });
@@ -1071,13 +1053,12 @@ class _AddVideoFormState extends State<_AddVideoForm> {
     setState(() => _isLoading = true);
 
     try {
-      await Supabase.instance.client.from('videos').insert({
+      await VideoService().createVideo({
         'title': _titleController.text,
         'video_id': _urlController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
         'category': _selectedCategory,
         'thumbnail_url': _thumbnailController.text.isEmpty ? null : _thumbnailController.text,
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
       });
 
       if (mounted) {

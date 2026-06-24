@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 
@@ -44,18 +42,22 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(password: _passwordController.text),
-      );
-      
+      // TODO(backend): el restablecimiento por correo requiere un endpoint
+      // `/auth/reset-password/confirm` (token de recuperación + envío de email).
+      // Aún no está implementado en el backend Next.js, así que por ahora se
+      // informa al usuario en lugar de cambiar la contraseña silenciosamente.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Contraseña actualizada exitosamente'),
-            backgroundColor: Colors.green,
+            content: Text(
+              'El restablecimiento por correo aún no está disponible. '
+              'Contacta al administrador para cambiar tu contraseña.',
+            ),
+            backgroundColor: Colors.orange,
           ),
         );
-        // Redirigir al login después de 2 segundos
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
             Navigator.of(context).pushReplacementNamed('/login');

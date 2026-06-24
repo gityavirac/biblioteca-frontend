@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/optimized_theme.dart';
 import '../../../../data/services/cache_service.dart';
+import '../../../../data/services/video_service.dart';
+import '../../../../data/services/category_service.dart';
 import '../category_videos_view.dart';
 import '../../../widgets/category_accordion.dart';
 import '../../../widgets/video_list_widget.dart';
@@ -23,11 +24,13 @@ class VideosTab extends StatefulWidget {
 }
 
 class _VideosTabState extends State<VideosTab> {
+  final _videoService = VideoService();
+  final _categoryService = CategoryService();
   String? selectedCategory;
   bool showCategoryAccordion = false;
   Map<String, List<String>> categories = {};
   bool _loadingCategories = true;
-  
+
   @override
   void initState() {
     super.initState();
@@ -36,12 +39,8 @@ class _VideosTabState extends State<VideosTab> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
-          .from('categories')
-          .select()
-          .eq('is_active', true)
-          .order('name');
-      
+      final response = await _categoryService.getCategories();
+
       setState(() {
         categories = {};
         for (var category in response) {
@@ -96,12 +95,7 @@ class _VideosTabState extends State<VideosTab> {
 
   Future<List<Map<String, dynamic>>> _getRecentVideos() async {
     try {
-      final response = await Supabase.instance.client
-          .from('videos')
-          .select()
-          .order('created_at', ascending: false)
-          .limit(20);
-      return response;
+      return await _videoService.getVideos();
     } catch (e) {
       return [];
     }

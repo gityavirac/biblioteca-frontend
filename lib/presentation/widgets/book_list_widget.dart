@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:typed_data';
 import '../../data/services/cache_service.dart';
+import '../../data/services/book_service.dart';
+import '../../data/services/category_service.dart';
+import '../../data/services/upload_service.dart';
+import '../../data/services/supabase_auth_service.dart';
 import '../../core/services/optimized_cache_service.dart';
 import '../screens/user/book_detail_screen.dart';
 
@@ -191,7 +194,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                       ),
                     ),
                     if (widget.canEdit && (widget.userRole == 'bibliotecario' || widget.userRole == 'admin' || widget.userRole == 'administrador' || 
-                        (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id)))
+                        (widget.userRole == 'profesor' && book['created_by'] == SupabaseAuthService().currentUser?.id)))
                       Positioned(
                         top: 4,
                         right: 4,
@@ -216,7 +219,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                                 ],
                               ),
                             ),
-                            if (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))
+                            if (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == SupabaseAuthService().currentUser?.id))
                               const PopupMenuItem(
                                 value: 'delete',
                                 child: Row(
@@ -281,7 +284,7 @@ class _BookListWidgetState extends State<BookListWidget> {
   void _handleMenuAction(String action, Map<String, dynamic> book, BuildContext context) {
     if (action == 'edit') {
       _showEditDialog(context, book);
-    } else if (action == 'delete' && (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == Supabase.instance.client.auth.currentUser?.id))) {
+    } else if (action == 'delete' && (widget.userRole == 'admin' || widget.userRole == 'administrador' || (widget.userRole == 'profesor' && book['created_by'] == SupabaseAuthService().currentUser?.id))) {
       _showDeleteDialog(context, book);
     }
   }
@@ -595,7 +598,7 @@ class _BookListWidgetState extends State<BookListWidget> {
                   ),
                   const SizedBox(height: 16),
                   FutureBuilder<List<Map<String, dynamic>>>(
-                    future: Supabase.instance.client.from('categories').select().eq('is_active', true).order('name'),
+                    future: CategoryService().getCategories(),
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const CircularProgressIndicator(color: Colors.white);
@@ -691,14 +694,9 @@ class _BookListWidgetState extends State<BookListWidget> {
                       final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${titleController.text.replaceAll(' ', '_')}.jpg';
                       
                       if (selectedCover!.bytes != null) {
-                        await Supabase.instance.client.storage
-                            .from('Libros_digitales')
-                            .uploadBinary(coverName, selectedCover!.bytes!);
-                        
-                        finalCoverUrl = Supabase.instance.client.storage
-                            .from('Libros_digitales')
-                            .getPublicUrl(coverName);
-                        
+                        finalCoverUrl = await UploadService()
+                            .upload(selectedCover!.bytes!, coverName);
+
                         print('📝 Nueva URL de portada: $finalCoverUrl');
                       }
                     } catch (storageError) {
@@ -729,9 +727,9 @@ class _BookListWidgetState extends State<BookListWidget> {
                   
                   print('📝 Datos a actualizar: $updateData');
                   
-                  final result = await Supabase.instance.client.from('books').update(updateData).eq('id', book['id']);
-                  
-                  print('✅ Resultado actualización: $result');
+                  await BookService().updateBook(book['id'], updateData);
+
+                  print('✅ Libro actualizado');
                   
                   Navigator.pop(context);
                   print('🔄 Llamando onRefresh...');
@@ -1004,18 +1002,15 @@ class _BookListWidgetState extends State<BookListWidget> {
                 print('🗑️ === INTENTANDO ELIMINAR LIBRO ===');
                 print('🗑️ Libro ID: ${book['id']}');
                 print('🗑️ Título: ${book['title']}');
-                print('🗑️ Usuario actual: ${Supabase.instance.client.auth.currentUser?.id}');
+                print('🗑️ Usuario actual: ${SupabaseAuthService().currentUser?.id}');
                 print('🗑️ Rol del usuario: ${widget.userRole}');
                 print('🗑️ Creado por: ${book['created_by']}');
                 
                 // Hacer soft delete del libro (marcar como eliminado)
                 print('🗑️ Marcando libro como eliminado (soft delete)...');
-                final result = await Supabase.instance.client
-                    .from('books')
-                    .update({'deleted_at': DateTime.now().toIso8601String()})
-                    .eq('id', book['id']);
-                    
-                print('✅ Resultado eliminación: $result');
+                await BookService().deleteBook(book['id']);
+
+                print('✅ Libro eliminado');
                 
                 widget.onRefresh();
                 if (context.mounted) {

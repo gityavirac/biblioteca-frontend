@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:glassmorphism/glassmorphism.dart';
+import '../../../../data/services/book_service.dart';
+import '../../../../data/services/category_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/optimized_theme.dart';
 import '../../../../core/services/optimized_cache_service.dart';
@@ -27,11 +28,13 @@ class LibraryTab extends StatefulWidget {
 }
 
 class _LibraryTabState extends State<LibraryTab> {
+  final _bookService = BookService();
+  final _categoryService = CategoryService();
   String? selectedCategory;
   bool showCategoryAccordion = false;
   Map<String, List<String>> categories = {};
   bool _loadingCategories = true;
-  
+
   @override
   void initState() {
     super.initState();
@@ -40,12 +43,8 @@ class _LibraryTabState extends State<LibraryTab> {
 
   Future<void> _loadCategories() async {
     try {
-      final response = await Supabase.instance.client
-          .from('categories')
-          .select()
-          .eq('is_active', true)
-          .order('name');
-      
+      final response = await _categoryService.getCategories();
+
       setState(() {
         categories = {};
         for (var category in response) {
@@ -106,13 +105,8 @@ class _LibraryTabState extends State<LibraryTab> {
     if (cached != null) return cached;
     
     try {
-      final response = await Supabase.instance.client
-          .from('books')
-          .select()
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false)
-          .limit(10);
-      
+      final response = await _bookService.getBooks(limit: 10);
+
       // Guardar en caché
       await OptimizedCacheService.instance.set(cacheKey, response);
       return response;
@@ -128,13 +122,8 @@ class _LibraryTabState extends State<LibraryTab> {
     if (cached != null) return cached;
     
     try {
-      final response = await Supabase.instance.client
-          .from('books')
-          .select()
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false)
-          .limit(20);
-      
+      final response = await _bookService.getBooks(limit: 20);
+
       await OptimizedCacheService.instance.set(cacheKey, response);
       return response;
     } catch (e) {
@@ -149,13 +138,10 @@ class _LibraryTabState extends State<LibraryTab> {
     if (cached != null) return cached;
     
     try {
-      final response = await Supabase.instance.client
-          .from('books')
-          .select()
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: false)
-          .range(page * limit, (page + 1) * limit - 1);
-      
+      // Nota: la paginación por rango se simplifica a un límite; el backend
+      // aún no expone offset/range.
+      final response = await _bookService.getBooks(limit: limit);
+
       await OptimizedCacheService.instance.set(cacheKey, response);
       return response;
     } catch (e) {

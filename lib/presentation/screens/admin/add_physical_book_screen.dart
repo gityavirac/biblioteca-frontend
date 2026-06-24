@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../theme/glass_theme.dart';
 import '../../../data/services/cache_service.dart';
+import '../../../data/services/book_service.dart';
+import '../../../data/services/upload_service.dart';
 
 class AddPhysicalBookScreen extends StatefulWidget {
   const AddPhysicalBookScreen({super.key});
@@ -77,13 +78,8 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
           final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
           
           if (_selectedCover!.bytes != null) {
-            await Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .uploadBinary(coverName, _selectedCover!.bytes!);
-            
-            coverUrl = Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .getPublicUrl(coverName);
+            coverUrl = await UploadService()
+                .upload(_selectedCover!.bytes!, coverName);
           }
         } catch (storageError) {
           print('Error subiendo portada: $storageError');
@@ -91,7 +87,7 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
       } else if (_coverUrlController.text.isNotEmpty && !_coverUrlController.text.contains('seleccionada')) {
         coverUrl = _coverUrlController.text;
       }
-      await Supabase.instance.client.from('books').insert({
+      await BookService().createBook({
         'title': _titleController.text,
         'author': _authorController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
@@ -104,7 +100,6 @@ class _AddPhysicalBookScreenState extends State<AddPhysicalBookScreen> {
         'subcategory': _selectedSubcategory,
         'categories': [_selectedCategory],
         'published_date': DateTime.now().toIso8601String().split('T')[0],
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': true,
         'physical_location': _locationController.text,
         'codigo_fisico': _codigoFisicoController.text.isEmpty ? null : _codigoFisicoController.text,

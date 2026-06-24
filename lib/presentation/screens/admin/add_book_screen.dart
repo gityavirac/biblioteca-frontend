@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:glassmorphism/glassmorphism.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +7,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../theme/glass_theme.dart';
 import '../../widgets/common_widgets.dart';
 import '../../../data/services/cache_service.dart';
+import '../../../data/services/book_service.dart';
+import '../../../data/services/upload_service.dart';
 
 class AddBookScreen extends StatefulWidget {
   const AddBookScreen({super.key});
@@ -128,35 +129,6 @@ class _AddBookScreenState extends State<AddBookScreen> {
         );
       }
       
-      // DEBUG: Verificar configuración de Supabase
-      print('🔍 DEBUG: Usuario autenticado: ${Supabase.instance.client.auth.currentUser?.id}');
-      print('🔍 DEBUG: Usuario email: ${Supabase.instance.client.auth.currentUser?.email}');
-      
-      // Verificar que el bucket existe
-      try {
-        final buckets = await Supabase.instance.client.storage.listBuckets();
-        final bucketNames = buckets.map((b) => b.name).toList();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Buckets disponibles: $bucketNames', style: GoogleFonts.outfit()),
-              backgroundColor: Colors.blue,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error listando buckets: $e', style: GoogleFonts.outfit()),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 5),
-            ),
-          );
-        }
-      }
-      
       String? fileUrl;
       String? coverUrl;
       bool isPhysicalOnly = _selectedCategory == 'Libros Físicos';
@@ -173,14 +145,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
           
           if (_selectedFile!.bytes != null) {
             print('🔍 DEBUG: Iniciando upload...');
-            await Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .uploadBinary(fileName, _selectedFile!.bytes!);
-            
-            print('🔍 DEBUG: Upload exitoso, obteniendo URL...');
-            fileUrl = Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .getPublicUrl(fileName);
+            fileUrl = await UploadService()
+                .upload(_selectedFile!.bytes!, fileName);
             print('🔍 DEBUG: URL obtenida: $fileUrl');
           }
         } catch (storageError) {
@@ -210,13 +176,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
           final coverName = '${DateTime.now().millisecondsSinceEpoch}_cover_${_titleController.text.replaceAll(' ', '_')}.jpg';
           
           if (_selectedCover!.bytes != null) {
-            await Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .uploadBinary(coverName, _selectedCover!.bytes!);
-            
-            coverUrl = Supabase.instance.client.storage
-                .from('Libros_digitales')
-                .getPublicUrl(coverName);
+            coverUrl = await UploadService()
+                .upload(_selectedCover!.bytes!, coverName);
           }
         } catch (storageError) {
           // Si falla el storage de portadas, continuar sin portada
@@ -227,7 +188,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
       }
       // Si es libro físico exclusivo, coverUrl queda null
 
-      await Supabase.instance.client.from('books').insert({
+      await BookService().createBook({
         'title': _titleController.text,
         'author': _authorController.text,
         'description': _descriptionController.text.isEmpty ? null : _descriptionController.text,
@@ -240,7 +201,6 @@ class _AddBookScreenState extends State<AddBookScreen> {
         'subcategory': _selectedSubcategory,
         'categories': [_selectedCategory],
         'published_date': DateTime.now().toIso8601String().split('T')[0],
-        'created_by': Supabase.instance.client.auth.currentUser?.id,
         'is_physical': _isPhysical || (_selectedCategory == 'Libros Físicos'),
         'physical_location': (_isPhysical || (_selectedCategory == 'Libros Físicos')) ? _locationController.text : null,
         'codigo_fisico': (_isPhysical || (_selectedCategory == 'Libros Físicos')) ? _codigoFisicoController.text : null,
